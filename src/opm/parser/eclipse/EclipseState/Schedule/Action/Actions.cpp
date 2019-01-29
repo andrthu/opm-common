@@ -17,8 +17,8 @@
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <opm/parser/eclipse/EclipseState/Schedule/Actions.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/ActionX.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Action/Actions.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Action/ActionX.hpp>
 
 namespace Opm {
 
@@ -54,8 +54,8 @@ bool Actions::ready(std::time_t sim_time) const {
 }
 
 
-std::vector<ActionX *> Actions::pending(std::time_t sim_time) {
-    std::vector<ActionX *> action_vector;
+std::vector<const ActionX *> Actions::pending(std::time_t sim_time) const {
+    std::vector<const ActionX *> action_vector;
     for (auto& pair : this->actions) {
         auto& action = pair.second;
         if (action.ready(sim_time))

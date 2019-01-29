@@ -38,7 +38,7 @@
 #include <opm/parser/eclipse/Parser/ParserKeywords/W.hpp>
 
 #include <opm/parser/eclipse/EclipseState/EclipseState.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/ActionX.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Action/ActionX.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/WellConnections.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/DynamicState.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/DynamicVector.hpp>
@@ -377,7 +377,7 @@ namespace Opm {
                     } else
                         action.addKeyword(action_keyword);
                 }
-                this->actions.add(action);
+                this->m_actions.add(action);
             } else
                 this->handleKeyword(currentStep, section, keywordIdx, keyword, parseContext, errors, grid, eclipseProperties, unit_system, rftProperties);
 
@@ -1728,9 +1728,9 @@ namespace Opm {
         if (automaticShutInStr == "STOP") {
             automaticShutIn = false;
         }
-	
-	const size_t wseqIndex = m_wells.size(); 
-        
+
+        const size_t wseqIndex = m_wells.size();
+
         Well well(wellName, wseqIndex,
                   headI, headJ, refDepth, drainageRadius,
                   preferredPhase, m_timeMap,
@@ -1820,7 +1820,7 @@ namespace Opm {
                 if (!child_groups.size()) {
                     //for (const auto& well_name : group.getWells( timeStep )) {
 		    const auto& ch_wells = group.getWells( timeStep );
-                    for (auto it= ch_wells.begin(); it != ch_wells.end(); it++) {		      
+                    for (auto it= ch_wells.begin(); it != ch_wells.end(); it++) {
                         wells.push_back( getWell( *it ));
                     }
                 }
@@ -1829,9 +1829,9 @@ namespace Opm {
         }
     }
 
-    
-    
-    
+
+
+
     std::vector< const Well* > Schedule::getWells(size_t timeStep) const {
         if (timeStep >= m_timeMap.size()) {
             throw std::invalid_argument("Timestep to large");
@@ -1900,7 +1900,7 @@ namespace Opm {
     }
 
     void Schedule::addGroup(const std::string& groupName, size_t timeStep) {
-	const size_t gseqIndex = m_groups.size(); 
+	const size_t gseqIndex = m_groups.size();
         m_groups.insert( groupName, Group { groupName, gseqIndex, m_timeMap, timeStep } );
         m_events.addEvent( ScheduleEvents::NEW_GROUP , timeStep );
     }
@@ -1952,15 +1952,15 @@ namespace Opm {
     }
 
     std::vector< const Group* > Schedule::getGroups(size_t timeStep) const {
-      
+
 	if (timeStep >= m_timeMap.size()) {
             throw std::invalid_argument("Timestep to large");
         }
-        
+
         auto defined = [=]( const Group& g ) {
             return g.hasBeenDefined( timeStep );
         };
-	
+
         std::vector< const Group* > groups;
 
         for( const auto& group : m_groups ) {
@@ -1969,7 +1969,7 @@ namespace Opm {
 	}
         return groups;
     }
-	
+
     void Schedule::addWellToGroup( Group& newGroup, Well& well , size_t timeStep) {
         const std::string currentGroupName = well.getGroupName(timeStep);
         if (currentGroupName != "") {
@@ -2149,15 +2149,17 @@ namespace Opm {
         return this->m_timeMap.seconds(timeStep);
     }
 
+    time_t Schedule::simTime(size_t timeStep) const {
+        return this->m_timeMap[timeStep];
+    }
 
     double Schedule::stepLength(size_t timeStep) const {
         return this->m_timeMap.getTimeStepLength(timeStep);
     }
 
 
-    void Schedule::evalAction(const SummaryState& /* st */, size_t /* timeStep */) {
-        if (this->actions.empty())
-            return;
+    const Actions& Schedule::actions() const {
+        return this->m_actions;
     }
 
 }

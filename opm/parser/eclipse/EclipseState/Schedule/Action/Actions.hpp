@@ -25,7 +25,7 @@
 #include <ctime>
 #include <map>
 
-#include <opm/parser/eclipse/EclipseState/Schedule/ActionX.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Action/ActionX.hpp>
 
 namespace Opm {
 
@@ -37,7 +37,7 @@ public:
     void add(const ActionX& action);
     bool ready(std::time_t sim_time) const;
     ActionX& at(const std::string& name);
-    std::vector<ActionX *> pending(std::time_t sim_time);
+    std::vector<const ActionX *> pending(std::time_t sim_time) const;
 
 private:
     std::map<std::string, ActionX> actions;

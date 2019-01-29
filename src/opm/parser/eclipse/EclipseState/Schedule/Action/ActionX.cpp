@@ -18,7 +18,7 @@
  */
 
 #include <opm/parser/eclipse/Deck/DeckKeyword.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/ActionX.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Action/ActionX.hpp>
 
 
 namespace Opm {
@@ -62,7 +62,7 @@ void ActionX::addKeyword(const DeckKeyword& kw) {
 
 
 
-bool ActionX::eval(std::time_t sim_time, const ActionContext& /* context */) {
+bool ActionX::eval(std::time_t sim_time, const ActionContext& /* context */) const {
     if (!this->ready(sim_time))
         return false;
     bool result = true;
