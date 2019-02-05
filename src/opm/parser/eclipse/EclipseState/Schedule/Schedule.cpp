@@ -21,7 +21,6 @@
 #include <vector>
 #include <stdexcept>
 #include <iostream>
-#include <set>
 
 #include <boost/algorithm/string.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -50,6 +49,7 @@
 
 #include <opm/parser/eclipse/EclipseState/Schedule/OilVaporizationProperties.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/ScheduleEnums.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/UDQ.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/TimeMap.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Tuning.hpp>
@@ -65,8 +65,6 @@
 #include <opm/parser/eclipse/Units/Units.hpp>
 
 namespace Opm {
-
-    static std::set<std::string> actionx_whitelist = {"WELSPECS","WELOPEN"};
 
 
     Schedule::Schedule( const Deck& deck,
@@ -84,7 +82,8 @@ namespace Opm {
         m_messageLimits( this->m_timeMap ),
         m_runspec( runspec ),
         wtest_config(this->m_timeMap, std::make_shared<WellTestConfig>() ),
-        wlist_manager( this->m_timeMap, std::make_shared<WListManager>())
+        wlist_manager( this->m_timeMap, std::make_shared<WListManager>()),
+        udq_config(this->m_timeMap, std::make_shared<UDQ>())
     {
         m_controlModeWHISTCTL = WellProducer::CMODE_UNDEFINED;
         addGroup( "FIELD", 0 );
@@ -211,6 +210,9 @@ namespace Opm {
             checkIfAllConnectionsIsShut(currentStep);
             currentStep += keyword.getRecord(0).getItem(0).size(); // This is a bit weird API.
         }
+
+        else if (keyword.name() == "UDQ")
+            handleUDQ(keyword, currentStep);
 
         else if (keyword.name() == "WLIST")
             handleWLIST( keyword, currentStep );
@@ -371,11 +373,12 @@ namespace Opm {
                     if (action_keyword.name() == "ENDACTIO")
                         break;
 
-                    if (actionx_whitelist.find(action_keyword.name()) == actionx_whitelist.end()) {
+                    if (ActionX::valid_keyword(action_keyword.name()))
+                        action.addKeyword(action_keyword);
+                    else {
                         std::string msg = "The keyword " + action_keyword.name() + " is not supported in a ACTIONX block.";
                         parseContext.handleError( ParseContext::ACTIONX_ILLEGAL_KEYWORD, msg, errors);
-                    } else
-                        action.addKeyword(action_keyword);
+                    }
                 }
                 this->m_actions.add(action);
             } else
@@ -938,6 +941,17 @@ namespace Opm {
         this->wlist_manager.update(currentStep, new_wlm);
     }
 
+    void Schedule::handleUDQ(const DeckKeyword& keyword, size_t currentStep) {
+        const auto& current = *this->udq_config.get(currentStep);
+        std::shared_ptr<UDQ> new_udq = std::make_shared<UDQ>(current);
+
+        for (const auto& record : keyword)
+            new_udq->add_record(record);
+
+        this->udq_config.update(currentStep, new_udq);
+    }
+
+
     void Schedule::handleWTEST(const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors) {
         const auto& current = *this->wtest_config.get(currentStep);
         std::shared_ptr<WellTestConfig> new_config(new WellTestConfig(current));
@@ -1147,7 +1161,7 @@ namespace Opm {
         }
     }
 
-    void Schedule::handleWELOPEN( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors) {
+    void Schedule::handleWELOPEN( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors, const std::vector<std::string>& matching_wells) {
 
         auto all_defaulted = []( const DeckRecord& rec ) {
             auto defaulted = []( const DeckItem& item ) {
@@ -1163,7 +1177,7 @@ namespace Opm {
             const auto& wellNamePattern = record.getItem( "WELL" ).getTrimmedString(0);
             const auto& status_str = record.getItem( "STATUS" ).getTrimmedString( 0 );
 
-            auto wells = getWells( wellNamePattern );
+            auto wells = getWells( wellNamePattern, matching_wells );
 
             if (wells.empty())
                 invalidNamePattern( wellNamePattern, parseContext, errors, keyword);
@@ -1881,22 +1895,32 @@ namespace Opm {
         return { tmp.begin(), tmp.end() };
     }
 
-    std::vector< Well* > Schedule::getWells(const std::string& wellNamePattern) {
-        size_t wildcard_pos = wellNamePattern.find("*");
+    std::vector< Well* > Schedule::getWells(const std::string& wellNamePattern, const std::vector<std::string>& matching_wells) {
+        // If we arrive here during the handling the body of a ACTIONX keyword
+        // we can arrive with wellname '?' and a set of matching wells.
+        if (wellNamePattern == "?") {
+            std::vector<Well*> wells;
+            for (const auto& well_name : matching_wells)
+                wells.push_back( std::addressof(m_wells.get(well_name) ));
 
-        if( wildcard_pos != wellNamePattern.length()-1 ) {
-            if( !m_wells.hasKey( wellNamePattern ) ) return {};
-            return { std::addressof( m_wells.get( wellNamePattern ) ) };
-        }
+            return wells;
+        } else {
+            auto wildcard_pos = wellNamePattern.find("*");
 
-        std::vector< Well* > wells;
-        for( auto& well : this->m_wells ) {
-            if( Well::wellNameInWellNamePattern( well.name(), wellNamePattern ) ) {
-                wells.push_back( std::addressof( well ) );
+            if( wildcard_pos != wellNamePattern.length()-1 ) {
+                if( !m_wells.hasKey( wellNamePattern ) ) return {};
+                return { std::addressof( m_wells.get( wellNamePattern ) ) };
             }
-        }
 
-        return wells;
+            std::vector< Well* > wells;
+            for( auto& well : this->m_wells ) {
+                if( Well::wellNameInWellNamePattern( well.name(), wellNamePattern ) ) {
+                    wells.push_back( std::addressof( well ) );
+                }
+            }
+
+            return wells;
+        }
     }
 
     void Schedule::addGroup(const std::string& groupName, size_t timeStep) {
@@ -2139,6 +2163,11 @@ namespace Opm {
         return *ptr;
     }
 
+    const UDQ& Schedule::getUDQConfig(size_t timeStep) const {
+        const auto& ptr = this->udq_config.get(timeStep);
+        return *ptr;
+    }
+
 
     size_t Schedule::size() const {
         return this->m_timeMap.size();
@@ -2160,6 +2189,21 @@ namespace Opm {
 
     const Actions& Schedule::actions() const {
         return this->m_actions;
+    }
+
+
+    void Schedule::applyAction(size_t reportStep, const ActionX& action, const std::vector<std::string>& matching_wells) {
+        ParseContext parseContext;
+        ErrorGuard errors;
+
+        for (const auto& keyword : action) {
+            if (!ActionX::valid_keyword(keyword.name()))
+                throw std::invalid_argument("The keyword: " + keyword.name() + " can not be handled in the ACTION body");
+
+            if (keyword.name() == "WELOPEN")
+                this->handleWELOPEN(keyword, reportStep, parseContext, errors, matching_wells);
+        }
+
     }
 
 }

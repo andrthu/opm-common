@@ -59,6 +59,7 @@ namespace Opm
     class UnitSystem;
     class ErrorGuard;
     class WListManager;
+    class UDQ;
 
     class Schedule {
     public:
@@ -136,6 +137,7 @@ namespace Opm
 
         const WellTestConfig& wtestConfig(size_t timestep) const;
         const WListManager& getWListManager(size_t timeStep) const;
+        const UDQ& getUDQConfig(size_t timeStep) const;
         const Actions& actions() const;
         void evalAction(const SummaryState& summary_state, size_t timeStep);
 
@@ -163,6 +165,8 @@ namespace Opm
         */
         void filterConnections(const EclipseGrid& grid);
         size_t size() const;
+
+        void applyAction(size_t reportStep, const ActionX& action, const std::vector<std::string>& matching_wells);
     private:
         TimeMap m_timeMap;
         OrderedMap< Well > m_wells;
@@ -178,11 +182,12 @@ namespace Opm
         std::map<int, DynamicState<std::shared_ptr<VFPInjTable>>> vfpinj_tables;
         DynamicState<std::shared_ptr<WellTestConfig>> wtest_config;
         DynamicState<std::shared_ptr<WListManager>> wlist_manager;
+        DynamicState<std::shared_ptr<UDQ>> udq_config;
 
         WellProducer::ControlModeEnum m_controlModeWHISTCTL;
         Actions m_actions;
 
-        std::vector< Well* > getWells(const std::string& wellNamePattern);
+        std::vector< Well* > getWells(const std::string& wellNamePattern, const std::vector<std::string>& matching_wells = {});
         std::vector< Group* > getGroups(const std::string& groupNamePattern);
 
         void updateWellStatus( Well& well, size_t reportStep , WellCommon::StatusEnum status);
@@ -192,6 +197,7 @@ namespace Opm
         bool handleGroupFromWELSPECS(const std::string& groupName, GroupTree& newTree) const;
         void addGroup(const std::string& groupName , size_t timeStep);
         void addWell(const std::string& wellName, const DeckRecord& record, size_t timeStep, WellCompletion::CompletionOrderEnum wellCompletionOrder);
+        void handleUDQ(const DeckKeyword& keyword, size_t currentStep);
         void handleWLIST(const DeckKeyword& keyword, size_t currentStep);
         void handleCOMPORD(const ParseContext& parseContext, ErrorGuard& errors, const DeckKeyword& compordKeyword, size_t currentStep);
         void handleWELSPECS( const SCHEDULESection&, size_t, size_t  );
@@ -212,7 +218,7 @@ namespace Opm
         void handleWSKPTAB( const DeckKeyword& keyword,  const size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
         void handleWINJTEMP( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
         void handleWCONINJH( const SCHEDULESection&,  const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
-        void handleWELOPEN( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors );
+        void handleWELOPEN( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors, const std::vector<std::string>& matching_wells = {});
         void handleWELTARG( const SCHEDULESection&,  const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
         void handleGCONINJE( const SCHEDULESection&,  const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
         void handleGCONPROD( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
