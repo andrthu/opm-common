@@ -32,6 +32,8 @@
 #include <opm/parser/eclipse/EclipseState/Grid/GridProperty.hpp>
 #include <opm/parser/eclipse/EclipseState/IOConfig/IOConfig.hpp>
 #include <opm/parser/eclipse/EclipseState/Runspec.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/UDQ.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/UDQContext.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Group.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Well.hpp>
@@ -63,6 +65,8 @@ namespace {
             "WIR", "GIR",
             "WIT", "GIT",
             "WCT", "GOR",
+            "OPTH", "WPTH", "GPTH",
+            "WITH", "GITH",
         };
     }
 
@@ -1110,6 +1114,16 @@ inline std::vector< const Well* > find_wells( const Schedule& schedule,
     return {};
 }
 
+
+bool is_udq(const std::string& keyword) {
+    return (keyword.size() > 1 && keyword[1] == 'U');
+}
+
+void eval_udq(const UDQ& udq, const UDQContext& context, SummaryState& st)
+{
+}
+
+
 }
 
 namespace out {
@@ -1152,6 +1166,7 @@ Summary::Summary( const EclipseState& st,
     handlers( new keyword_handlers() )
 {
 
+    const auto& udq = schedule.getUDQConfig(schedule.size() - 1);
     const auto& init_config = st.getInitConfig();
     const char * restart_case = nullptr;
     int restart_step = -1;
@@ -1244,6 +1259,10 @@ Summary::Summary( const EclipseState& st,
 
             auto * nodeptr = ecl_smspec_add_node( smspec, keyword.c_str(), node.wgname().c_str(), node.num(), st.getUnits().name( val.unit ), 0 );
             this->handlers->handlers.emplace_back( nodeptr, handle );
+        } else if (is_udq(keyword)) {
+            const auto& unit = udq.unit(keyword);
+            const auto& udq_params = st.runspec().udqParams();
+            ecl_smspec_add_node(smspec, keyword.c_str(), node.wgname().c_str(), node.num(), unit.c_str(), udq_params.undefinedValue());
         } else {
             unsupported_keywords.insert(keyword);
         }
@@ -1469,6 +1488,11 @@ void Summary::add_timestep( int report_step,
     }
 
     {
+        UDQContext udq_context(st);
+        const UDQ& udq = schedule.getUDQConfig(sim_step);
+        eval_udq(udq, udq_context, st);
+    }
+    {
         const ecl_sum_type * ecl_sum = this->ecl_sum.get();
         const ecl_smspec_type * smspec = ecl_sum_get_smspec(ecl_sum);
         auto num_nodes = ecl_smspec_num_nodes(smspec);
@@ -1483,8 +1507,10 @@ void Summary::add_timestep( int report_step,
             const std::string key = smspec_node.get_gen_key1();
             if (st.has(key))
                 ecl_sum_tstep_iset(tstep, smspec_node.get_params_index(), st.get(key));
-            else
-                OpmLog::warning("Have configured UDQ variable " + key + " for summary output - but it has not been calculated");
+            /*
+              else
+              OpmLog::warning("Have configured summary variable " + key + " for summary output - but it has not been calculated");
+            */
         }
     }
 
@@ -1501,6 +1527,25 @@ Summary::~Summary() {}
 const SummaryState& Summary::get_restart_vectors() const
 {
     return this->prev_state;
+}
+
+void Summary::reset_cumulative_quantities(const SummaryState& rstrt)
+{
+    for (const auto& f : this->handlers->handlers) {
+        if (! smspec_node_is_total(f.first)) {
+            // Ignore quantities that are not cumulative ("total").
+            continue;
+        }
+
+        const auto* genkey = smspec_node_get_gen_key1(f.first);
+        if (rstrt.has(genkey)) {
+            // Assume 'rstrt' uses output units.  This is satisfied if rstrt
+            // is constructed from information in a restart file--i.e., from
+            // the double precision restart vectors 'XGRP' and 'XWEL' during
+            // RestartIO::load().
+            this->prev_state.add(genkey, rstrt.get(genkey));
+        }
+    }
 }
 
 }} // namespace Opm::out

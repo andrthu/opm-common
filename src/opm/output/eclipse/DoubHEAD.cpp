@@ -28,6 +28,8 @@
 
 #include <opm/output/eclipse/InteHEAD.hpp> // Opm::RestartIO::makeUTCTime()
 
+#include <opm/output/eclipse/VectorItems/doubhead.hpp>
+
 #include <chrono>
 #include <cmath>
 #include <ctime>
@@ -38,12 +40,14 @@
 #include <utility>
 #include <vector>
 
+namespace VI = Opm::RestartIO::Helpers::VectorItems;
+
 enum Index : std::vector<double>::size_type {
     // 0..9
     SimTime =   0,
-    TsInit  =   1,
-    TsMaxz  =   2,
-    TsMinz  =   3,
+    TsInit  =   VI::doubhead::TsInit,
+    TsMaxz  =   VI::doubhead::TsMaxz,
+    TsMinz  =   VI::doubhead::TsMinz,
     TsMchp  =   4,
     TsFMax  =   5,
     TsFMin  =   6,
@@ -303,7 +307,7 @@ enum Index : std::vector<double>::size_type {
     dh_218  = 218,
     dh_219  = 219,
 
-    // 220..227
+    // 220..228
     dh_220  = 220,
     dh_221  = 221,
     dh_222  = 222,
@@ -376,7 +380,6 @@ namespace {
 
 Opm::RestartIO::DoubHEAD::DoubHEAD()
     : data_(Index::NUMBER_OF_ITEMS, 0.0)
-    //: data_(Index::NUMBER_OF_ITEMS, -1.0e20)
 {
     // Numbers below have unknown usage, values have been determined by
     // experiments to be constant across a range of reference cases.
@@ -589,15 +592,26 @@ Opm::RestartIO::DoubHEAD::timeStamp(const TimeStamp& ts)
 }
 
 Opm::RestartIO::DoubHEAD&
+Opm::RestartIO::DoubHEAD::nextStep(const double nextTimeStep)
+{
+    if (nextTimeStep > 0.0) {
+        this->data_[Index::TsInit] = nextTimeStep;
+    }
+
+    return *this;
+}
+
+Opm::RestartIO::DoubHEAD&
 Opm::RestartIO::DoubHEAD::drsdt(const Schedule&   sched,
-                                const std::size_t lookup_step)
+                                const std::size_t lookup_step,
+				const double      cnvT)
 {
     const auto& vappar =
         sched.getOilVaporizationProperties(lookup_step);
 
     this->data_[dRsdt] =
         (vappar.getType() == Opm::OilVaporizationEnum::DRDT)
-        ? vappar.getMaxDRSDT(0)
+        ? vappar.getMaxDRSDT(0)*cnvT
         : 1.0e+20;
 
     return *this;

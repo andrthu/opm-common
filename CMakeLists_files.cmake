@@ -82,6 +82,7 @@ if(ENABLE_ECL_INPUT)
     src/opm/parser/eclipse/EclipseState/Schedule/Action/ActionParser.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Action/ActionValue.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Action/ASTNode.cpp
+    src/opm/parser/eclipse/EclipseState/Schedule/ArrayDimChecker.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Connection.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/WellConnections.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Events.cpp
@@ -124,6 +125,7 @@ if(ENABLE_ECL_INPUT)
     src/opm/parser/eclipse/EclipseState/Tables/Tables.cpp
     src/opm/parser/eclipse/EclipseState/UDQParams.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/UDQ.cpp
+    src/opm/parser/eclipse/EclipseState/Schedule/UDQContext.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/UDQExpression.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/VFPInjTable.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/VFPProdTable.cpp
@@ -256,6 +258,7 @@ if(ENABLE_ECL_OUTPUT)
           tests/test_AggregateWellData.cpp
           #The unit tests are not finished yet, will be added in a separate pullrequest soon
           #tests/test_AggregateMSWData.cpp
+          tests/test_ArrayDimChecker.cpp
           tests/test_CharArrayNullTerm.cpp
           tests/test_EclipseIO.cpp
           tests/test_DoubHEAD.cpp
@@ -281,6 +284,7 @@ list (APPEND TEST_DATA_FILES
 )
 if(ENABLE_ECL_OUTPUT)
   list (APPEND TEST_DATA_FILES
+          tests/expect-wdims.err.out
           tests/FIRST_SIM.DATA
           tests/FIRST_SIM_THPRES.DATA
           tests/summary_deck.DATA
@@ -465,6 +469,7 @@ if(ENABLE_ECL_INPUT)
        opm/parser/eclipse/EclipseState/Schedule/Action/ActionContext.hpp
        opm/parser/eclipse/EclipseState/Schedule/Action/Actions.hpp
        opm/parser/eclipse/EclipseState/Schedule/Action/ActionX.hpp
+       opm/parser/eclipse/EclipseState/Schedule/ArrayDimChecker.hpp
        opm/parser/eclipse/EclipseState/Schedule/TimeMap.hpp
        opm/parser/eclipse/EclipseState/Schedule/VFPInjTable.hpp
        opm/parser/eclipse/EclipseState/Schedule/VFPProdTable.hpp
@@ -500,8 +505,10 @@ if(ENABLE_ECL_INPUT)
        opm/parser/eclipse/EclipseState/IOConfig/IOConfig.hpp
        opm/parser/eclipse/EclipseState/checkDeck.hpp
        opm/parser/eclipse/EclipseState/Runspec.hpp
+       opm/parser/eclipse/EclipseState/Schedule/UDQContext.hpp
        opm/parser/eclipse/EclipseState/Schedule/UDQ.hpp
        opm/parser/eclipse/EclipseState/UDQParams.hpp
+       opm/parser/eclipse/EclipseState/Schedule/UDQ.hpp
        opm/parser/eclipse/EclipseState/Schedule/UDQExpression.hpp
        opm/parser/eclipse/Deck/DeckItem.hpp
        opm/parser/eclipse/Deck/Deck.hpp
@@ -521,7 +528,9 @@ if(ENABLE_ECL_OUTPUT)
         opm/output/data/Solution.hpp
         opm/output/data/Wells.hpp
         opm/output/eclipse/VectorItems/connection.hpp
+        opm/output/eclipse/VectorItems/group.hpp
         opm/output/eclipse/VectorItems/intehead.hpp
+        opm/output/eclipse/VectorItems/msw.hpp
         opm/output/eclipse/VectorItems/well.hpp
         opm/output/eclipse/AggregateGroupData.hpp
         opm/output/eclipse/AggregateConnectionData.hpp

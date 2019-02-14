@@ -77,6 +77,12 @@ namespace Opm {
         addKey(PARSE_MISSING_DIMS_KEYWORD, InputError::THROW_EXCEPTION);
         addKey(PARSE_EXTRA_DATA, InputError::THROW_EXCEPTION);
         addKey(PARSE_MISSING_INCLUDE, InputError::EXIT1);
+        addKey(PARSE_LONG_KEYWORD, InputError::WARN);
+
+        this->addKey(RUNSPEC_NUMWELLS_TOO_LARGE, InputError::DELAYED_EXIT1);
+        this->addKey(RUNSPEC_CONNS_PER_WELL_TOO_LARGE, InputError::DELAYED_EXIT1);
+        this->addKey(RUNSPEC_NUMGROUPS_TOO_LARGE, InputError::DELAYED_EXIT1);
+        this->addKey(RUNSPEC_GROUPSIZE_TOO_LARGE, InputError::DELAYED_EXIT1);
 
         addKey(UNSUPPORTED_SCHEDULE_GEO_MODIFIER, InputError::THROW_EXCEPTION);
         addKey(UNSUPPORTED_COMPORD_TYPE, InputError::THROW_EXCEPTION);
@@ -298,6 +304,12 @@ namespace Opm {
     const std::string ParseContext::PARSE_EXTRA_DATA = "PARSE_EXTRA_DATA";
     const std::string ParseContext::PARSE_MISSING_SECTIONS = "PARSE_MISSING_SECTIONS";
     const std::string ParseContext::PARSE_MISSING_INCLUDE = "PARSE_MISSING_INCLUDE";
+    const std::string ParseContext::PARSE_LONG_KEYWORD = "PARSE_LONG_KEYWORD";
+
+    const std::string ParseContext::RUNSPEC_NUMWELLS_TOO_LARGE = "RUNSPEC_NUMWELLS_TOO_LARGE";
+    const std::string ParseContext::RUNSPEC_CONNS_PER_WELL_TOO_LARGE = "RUNSPEC_CONNS_PER_WELL_TOO_LARGE";
+    const std::string ParseContext::RUNSPEC_NUMGROUPS_TOO_LARGE = "RUNSPEC_NUMGROUPS_TOO_LARGE";
+    const std::string ParseContext::RUNSPEC_GROUPSIZE_TOO_LARGE = "RUNSPEC_GROUPSIZE_TOO_LARGE";
 
     const std::string ParseContext::UNSUPPORTED_SCHEDULE_GEO_MODIFIER = "UNSUPPORTED_SCHEDULE_GEO_MODIFIER";
     const std::string ParseContext::UNSUPPORTED_COMPORD_TYPE = "UNSUPPORTED_COMPORD_TYPE";
@@ -319,5 +331,3 @@ namespace Opm {
     const std::string ParseContext::SIMULATOR_KEYWORD_NOT_SUPPORTED = "SIMULATOR_KEYWORD_NOT_SUPPORTED";
     const std::string ParseContext::SIMULATOR_KEYWORD_ITEM_NOT_SUPPORTED = "SIMULATOR_KEYWORD_ITEM_NOT_SUPPORTED";
 }
-
-
