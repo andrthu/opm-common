@@ -198,6 +198,7 @@ set( keywords
      000_Eclipse100/O/OPERNUM
      000_Eclipse100/O/OPTIONS
      000_Eclipse100/O/OUTRAD
+     000_Eclipse100/O/OVERBURD
      000_Eclipse100/P/PARALLEL
      000_Eclipse100/P/PATHS
      000_Eclipse100/P/PBVD
@@ -254,10 +255,13 @@ set( keywords
      000_Eclipse100/R/RESTART
      000_Eclipse100/R/RKTRMDIR
      000_Eclipse100/R/ROCK
+     000_Eclipse100/R/ROCK2D
+     000_Eclipse100/R/ROCK2DTR
      000_Eclipse100/R/ROCKCOMP
      000_Eclipse100/R/ROCKNUM
      000_Eclipse100/R/ROCKOPTS
      000_Eclipse100/R/ROCKTAB
+     000_Eclipse100/R/ROCKWNOD
      000_Eclipse100/R/RPTGRID
      000_Eclipse100/R/RPTONLY
      000_Eclipse100/R/RPTONLYO
@@ -451,7 +455,7 @@ set( keywords
      001_Eclipse300/Z/ZFACTORS
      002_Frontsim/N/NOGRAV
 
-     900_OPM/F/FREEBC
+     900_OPM/B/BC
      900_OPM/G/GCOMPIDX
      900_OPM/G/GRUPRIG
      900_OPM/G/GASDENT

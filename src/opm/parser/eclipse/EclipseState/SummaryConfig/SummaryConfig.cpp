@@ -16,31 +16,33 @@
   You should have received a copy of the GNU General Public License
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include <iostream>
+#include <algorithm>
+#include <array>
 
+#include <ert/ecl/ecl_smspec.hpp>
 
 #include <opm/parser/eclipse/Parser/ParseContext.hpp>
+
 #include <opm/parser/eclipse/Deck/Deck.hpp>
 #include <opm/parser/eclipse/Deck/DeckItem.hpp>
 #include <opm/parser/eclipse/Deck/DeckKeyword.hpp>
 #include <opm/parser/eclipse/Deck/DeckRecord.hpp>
 #include <opm/parser/eclipse/Deck/Section.hpp>
-#include <opm/parser/eclipse/EclipseState/Tables/TableManager.hpp>
+
 #include <opm/parser/eclipse/EclipseState/EclipseState.hpp>
+#include <opm/parser/eclipse/EclipseState/Tables/TableManager.hpp>
 #include <opm/parser/eclipse/EclipseState/Grid/EclipseGrid.hpp>
 #include <opm/parser/eclipse/EclipseState/Grid/GridDims.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Connection.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/WellConnections.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQInput.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Group.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/TimeMap.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/Connection.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/WellConnections.hpp>
 #include <opm/parser/eclipse/EclipseState/SummaryConfig/SummaryConfig.hpp>
 
-#include <ert/ecl/ecl_smspec.hpp>
-
-#include <iostream>
-#include <algorithm>
-#include <array>
 
 namespace Opm {
 
@@ -123,6 +125,9 @@ namespace {
          {"SGAS" , {"BSGAS"}}
     };
 
+    bool is_udq(const std::string& keyword) {
+        return (keyword.size() > 1 && keyword[1] == 'U');
+    }
 
 
 void handleMissingWell( const ParseContext& parseContext, ErrorGuard& errors, const std::string& keyword, const std::string& well) {
@@ -154,13 +159,13 @@ inline void keywordW( SummaryConfig::keyword_list& list,
 
     if (keyword.size() && hasValue(keyword)) {
         for( const std::string& pattern : keyword.getStringData()) {
-            auto wells = schedule.getWellsMatching( pattern );
+          auto well_names = schedule.wellNames( pattern, schedule.size() - 1 );
 
-            if( wells.empty() )
+            if( well_names.empty() )
                 handleMissingWell( parseContext, errors, keyword.name(), pattern );
 
-            for( const auto* well : wells )
-                list.push_back( SummaryConfig::keyword_type( keyword.name(), well->name() ));
+            for( const auto& well_name : well_names)
+                list.push_back( SummaryConfig::keyword_type( keyword.name(), well_name ));
         }
     } else
         for (const auto* well : schedule.getWells())
@@ -289,16 +294,15 @@ inline void keywordMISC( SummaryConfig::keyword_list& list,
 
         const auto& wellitem = record.getItem( 0 );
 
-        const auto wells = wellitem.defaultApplied( 0 )
-                         ? schedule.getWells()
-                         : schedule.getWellsMatching( wellitem.getTrimmedString( 0 ) );
+        const auto well_names = wellitem.defaultApplied( 0 )
+                              ? schedule.wellNames()
+                              : schedule.wellNames( wellitem.getTrimmedString( 0 ) );
 
-        if( wells.empty() )
+        if( well_names.empty() )
             handleMissingWell( parseContext, errors, keyword.name(), wellitem.getTrimmedString( 0 ) );
 
-        for( const auto* well : wells ) {
-            const auto& name = well->name();
-
+        for(const auto& name : well_names) {
+            const auto* well = schedule.getWell(name);
             /*
              * we don't want to add completions that don't exist, so we iterate
              * over a well's completions regardless of the desired block is
@@ -465,19 +469,21 @@ inline void keywordMISC( SummaryConfig::keyword_list& list,
 
         for (const auto& record : keyword) {
             const auto& wellitem = record.getItem(0);
-            const auto& wells    = wellitem.defaultApplied(0)
-                ? schedule.getWells()
-                : schedule.getWellsMatching(wellitem.getTrimmedString(0));
+            const auto& well_names = wellitem.defaultApplied(0)
+                ? schedule.wellNames()
+                : schedule.wellNames(wellitem.getTrimmedString(0));
 
-            if (wells.empty()) {
+            if (well_names.empty())
                 handleMissingWell(parseContext, errors, keyword.name(),
                                   wellitem.getTrimmedString(0));
-            }
 
             // Negative 1 (< 0) if segment ID defaulted.  Defaulted
             // segment number in record implies all segments.
             const auto segID = record.getItem(1).defaultApplied(0)
                 ? -1 : record.getItem(1).get<int>(0);
+            std::vector<const Well*> wells;
+            for (const auto& well_name : well_names)
+                wells.push_back( schedule.getWell(well_name) );
 
             makeSegmentNodes(last_timestep, segID, keyword, wells, list);
         }
@@ -533,6 +539,21 @@ inline void keywordMISC( SummaryConfig::keyword_list& list,
                         ErrorGuard& errors,
                         const GridDims& dims) {
     const auto var_type = ecl_smspec_identify_var_type( keyword.name().c_str() );
+    const auto& name = keyword.name();
+    if (is_udq(name)) {
+        const auto& udq = schedule.getUDQConfig(schedule.size() - 1);
+
+        if (!udq.has_keyword(name)) {
+            std::string msg{"Summary output has been requested for UDQ keyword: " + name + " but it has not been configured"};
+            parseContext.handleError(ParseContext::SUMMARY_UNDEFINED_UDQ, msg, errors);
+            return;
+        }
+
+        if (!udq.has_unit(name)) {
+            std::string msg{"Summary output has been requested for UDQ keyword: " + name + " but no unit has not been configured"};
+            parseContext.handleError(ParseContext::SUMMARY_UDQ_MISSING_UNIT, msg, errors);
+        }
+    }
 
     switch( var_type ) {
         case ECL_SMSPEC_WELL_VAR: return keywordW( list, parseContext, errors, keyword, schedule );

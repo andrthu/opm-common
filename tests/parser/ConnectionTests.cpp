@@ -32,8 +32,8 @@
 #include <opm/parser/eclipse/Deck/DeckRecord.hpp>
 #include <opm/parser/eclipse/Deck/DeckKeyword.hpp>
 
-#include <opm/parser/eclipse/EclipseState/Schedule/Connection.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/WellConnections.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/Connection.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/WellConnections.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/ScheduleEnums.hpp>
 #include <opm/parser/eclipse/EclipseState/Grid/EclipseGrid.hpp>
 #include <opm/parser/eclipse/EclipseState/Eclipse3DProperties.hpp>
@@ -59,8 +59,9 @@ inline std::ostream& operator<<( std::ostream& stream, const WellConnections& cs
 
 
 BOOST_AUTO_TEST_CASE(CreateWellConnectionsOK) {
-    Opm::WellConnections completionSet;
+    Opm::WellConnections completionSet(1,1);
     BOOST_CHECK_EQUAL( 0U , completionSet.size() );
+    BOOST_CHECK(!completionSet.allConnectionsShut());
 }
 
 
@@ -150,9 +151,8 @@ Opm::WellConnections loadCOMPDAT(const std::string& compdat_keyword) {
     Opm::Eclipse3DProperties props(deck, tables, grid );
     const auto& keyword = deck.getKeyword("COMPDAT", 0);
     Opm::WellConnections connections;
-    std::size_t totnc = 0;
     for (const auto& rec : keyword)
-        connections.loadCOMPDAT(rec, grid, props, totnc);
+        connections.loadCOMPDAT(rec, grid, props);
 
     return connections;
 }

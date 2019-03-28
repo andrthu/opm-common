@@ -26,28 +26,28 @@
 #include <string>
 #include <unordered_map>
 
+#include <ert/ecl/smspec_node.hpp>
+#include <ert/ecl/ecl_smspec.hpp>
+#include <ert/ecl/ecl_kw_magic.h>
+
 #include <opm/common/OpmLog/OpmLog.hpp>
 
 #include <opm/parser/eclipse/EclipseState/EclipseState.hpp>
 #include <opm/parser/eclipse/EclipseState/Grid/GridProperty.hpp>
 #include <opm/parser/eclipse/EclipseState/IOConfig/IOConfig.hpp>
 #include <opm/parser/eclipse/EclipseState/Runspec.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/UDQ.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/UDQContext.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQInput.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQContext.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Group.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/WellProductionProperties.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/WellProductionProperties.hpp>
 #include <opm/parser/eclipse/EclipseState/SummaryConfig/SummaryConfig.hpp>
 #include <opm/parser/eclipse/Units/UnitSystem.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/SummaryState.hpp>
 
 #include <opm/output/eclipse/Summary.hpp>
 #include <opm/output/eclipse/RegionCache.hpp>
-
-#include <ert/ecl/smspec_node.hpp>
-#include <ert/ecl/ecl_smspec.hpp>
-#include <ert/ecl/ecl_kw_magic.h>
 
 namespace {
     struct SegmentResultDescriptor
@@ -1035,26 +1035,26 @@ static const std::unordered_map< std::string, UnitSystem::measure> single_values
   {"TCPUDAY"  , UnitSystem::measure::time },
   {"STEPTYPE" , UnitSystem::measure::identity },
   {"TELAPLIN" , UnitSystem::measure::time },
-  {"FWIP"     , UnitSystem::measure::volume },
-  {"FOIP"     , UnitSystem::measure::volume },
-  {"FGIP"     , UnitSystem::measure::volume },
-  {"FOIPL"    , UnitSystem::measure::volume },
-  {"FOIPG"    , UnitSystem::measure::volume },
-  {"FGIPL"    , UnitSystem::measure::volume },
-  {"FGIPG"    , UnitSystem::measure::volume },
+  {"FWIP"     , UnitSystem::measure::liquid_surface_volume },
+  {"FOIP"     , UnitSystem::measure::liquid_surface_volume },
+  {"FGIP"     , UnitSystem::measure::gas_surface_volume },
+  {"FOIPL"    , UnitSystem::measure::liquid_surface_volume },
+  {"FOIPG"    , UnitSystem::measure::liquid_surface_volume },
+  {"FGIPL"    , UnitSystem::measure::gas_surface_volume },
+  {"FGIPG"    , UnitSystem::measure::gas_surface_volume },
   {"FPR"      , UnitSystem::measure::pressure },
 
 };
 
 static const std::unordered_map< std::string, UnitSystem::measure> region_units = {
   {"RPR"      , UnitSystem::measure::pressure},
-  {"ROIP"     , UnitSystem::measure::volume },
-  {"ROIPL"    , UnitSystem::measure::volume },
-  {"ROIPG"    , UnitSystem::measure::volume },
-  {"RGIP"     , UnitSystem::measure::volume },
-  {"RGIPL"    , UnitSystem::measure::volume },
-  {"RGIPG"    , UnitSystem::measure::volume },
-  {"RWIP"     , UnitSystem::measure::volume }
+  {"ROIP"     , UnitSystem::measure::liquid_surface_volume },
+  {"ROIPL"    , UnitSystem::measure::liquid_surface_volume },
+  {"ROIPG"    , UnitSystem::measure::liquid_surface_volume },
+  {"RGIP"     , UnitSystem::measure::gas_surface_volume },
+  {"RGIPL"    , UnitSystem::measure::gas_surface_volume },
+  {"RGIPG"    , UnitSystem::measure::gas_surface_volume },
+  {"RWIP"     , UnitSystem::measure::liquid_surface_volume }
 };
 
 static const std::unordered_map< std::string, UnitSystem::measure> block_units = {
@@ -1063,7 +1063,7 @@ static const std::unordered_map< std::string, UnitSystem::measure> block_units =
   {"BSWAT"      , UnitSystem::measure::identity},
   {"BWSAT"      , UnitSystem::measure::identity},
   {"BSGAS"      , UnitSystem::measure::identity},
-  {"BGSAS"      , UnitSystem::measure::identity},
+  {"BGSAT"      , UnitSystem::measure::identity},
 };
 
 inline std::vector< const Well* > find_wells( const Schedule& schedule,
@@ -1119,11 +1119,33 @@ bool is_udq(const std::string& keyword) {
     return (keyword.size() > 1 && keyword[1] == 'U');
 }
 
-void eval_udq(const UDQ& udq, const UDQContext& context, SummaryState& st)
+void eval_udq(const Schedule& schedule, std::size_t sim_step, SummaryState& st)
 {
+    const UDQInput& udq = schedule.getUDQConfig(sim_step);
+    const auto& func_table = udq.function_table();
+    UDQContext context(func_table, st);
+    std::vector<std::string> wells;
+    for (const auto* well : schedule.getWells())
+        wells.push_back(well->name());
+
+    for (const auto& assign : udq.assignments(UDQVarType::WELL_VAR)) {
+        auto ws = assign.eval_wells(wells);
+        for (const auto& well : wells) {
+            const auto& udq_value = ws[well];
+            if (udq_value)
+                st.add_well_var(well, ws.name(), udq_value.value());
+        }
+    }
+
+    for (const auto& def : udq.definitions(UDQVarType::WELL_VAR)) {
+        auto ws = def.eval_wells(context);
+        for (const auto& well : wells) {
+            const auto& udq_value = ws[well];
+            if (udq_value)
+                st.add_well_var(well, def.keyword(), udq_value.value());
+        }
+    }
 }
-
-
 }
 
 namespace out {
@@ -1260,12 +1282,15 @@ Summary::Summary( const EclipseState& st,
             auto * nodeptr = ecl_smspec_add_node( smspec, keyword.c_str(), node.wgname().c_str(), node.num(), st.getUnits().name( val.unit ), 0 );
             this->handlers->handlers.emplace_back( nodeptr, handle );
         } else if (is_udq(keyword)) {
-            const auto& unit = udq.unit(keyword);
+            std::string udq_unit = "?????";
             const auto& udq_params = st.runspec().udqParams();
-            ecl_smspec_add_node(smspec, keyword.c_str(), node.wgname().c_str(), node.num(), unit.c_str(), udq_params.undefinedValue());
-        } else {
+
+            if (udq.has_unit(keyword))
+                udq_unit = udq.unit(keyword);
+
+            ecl_smspec_add_node(smspec, keyword.c_str(), node.wgname().c_str(), node.num(), udq_unit.c_str(), udq_params.undefinedValue());
+        } else
             unsupported_keywords.insert(keyword);
-        }
     }
     for ( const auto& keyword : unsupported_keywords ) {
         Opm::OpmLog::info("Keyword " + std::string(keyword) + " is unhandled");
@@ -1487,11 +1512,7 @@ void Summary::add_timestep( int report_step,
         }
     }
 
-    {
-        UDQContext udq_context(st);
-        const UDQ& udq = schedule.getUDQConfig(sim_step);
-        eval_udq(udq, udq_context, st);
-    }
+    eval_udq(schedule, sim_step, st);
     {
         const ecl_sum_type * ecl_sum = this->ecl_sum.get();
         const ecl_smspec_type * smspec = ecl_sum_get_smspec(ecl_sum);

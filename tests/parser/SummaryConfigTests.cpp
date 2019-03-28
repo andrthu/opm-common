@@ -48,6 +48,12 @@ static Deck createDeck_no_wells( const std::string& summary ) {
             "DYV \n 10*400 /\n"
             "DZV \n 10*400 /\n"
             "TOPS \n 100*2202 / \n"
+            "PERMX\n"
+            "  1000*0.25 /\n"
+            "COPY\n"
+            "  PERMX PERMY /\n"
+            "  PERMX PERMZ /\n"
+            "/\n"
             "REGIONS\n"
             "FIPNUM\n"
             "200*1 300*2 500*3 /\n"
@@ -75,6 +81,12 @@ static Deck createDeck( const std::string& summary ) {
             "DYV \n 10*400 /\n"
             "DZV \n 10*400 /\n"
             "TOPS \n 100*2202 / \n"
+            "PERMX\n"
+            "  1000*0.25 /\n"
+            "COPY\n"
+            "  PERMX PERMY /\n"
+            "  PERMX PERMZ /\n"
+            "/\n"
             "REGIONS\n"
             "FIPNUM\n"
             "200*1 300*2 500*3 /\n"
@@ -431,6 +443,19 @@ BOOST_AUTO_TEST_CASE(INVALID_WELL2) {
     parseContext.updateKey( ParseContext::SUMMARY_UNKNOWN_WELL , InputError::IGNORE );
     BOOST_CHECK_NO_THROW( createSummary( input , parseContext ));
 }
+
+BOOST_AUTO_TEST_CASE(UNDEFINED_UDQ_WELL) {
+    ParseContext parseContext;
+    const auto input = "WUWCT\n"
+        "/\n";
+    parseContext.updateKey( ParseContext::SUMMARY_UNDEFINED_UDQ, InputError::THROW_EXCEPTION );
+    BOOST_CHECK_THROW( createSummary( input , parseContext ) , std::invalid_argument);
+
+    parseContext.updateKey( ParseContext::SUMMARY_UNDEFINED_UDQ, InputError::IGNORE );
+    BOOST_CHECK_NO_THROW( createSummary( input , parseContext ));
+}
+
+
 
 
 BOOST_AUTO_TEST_CASE(INVALID_GROUP) {

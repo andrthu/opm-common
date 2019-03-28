@@ -24,6 +24,7 @@
 
 #include <boost/date_time/posix_time/posix_time_types.hpp>
 
+#include <opm/parser/eclipse/Parser/ParseContext.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/DynamicState.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/DynamicVector.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Events.hpp>
@@ -32,14 +33,13 @@
 #include <opm/parser/eclipse/EclipseState/Schedule/OilVaporizationProperties.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/ScheduleEnums.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Tuning.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well.hpp>
 #include <opm/parser/eclipse/EclipseState/Util/OrderedMap.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/MessageLimits.hpp>
 #include <opm/parser/eclipse/EclipseState/Runspec.hpp>
-#include <opm/parser/eclipse/Parser/ParseContext.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/VFPInjTable.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/VFPProdTable.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/WellTestConfig.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/WellTestConfig.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Action/Actions.hpp>
 
 namespace Opm
@@ -59,7 +59,7 @@ namespace Opm
     class UnitSystem;
     class ErrorGuard;
     class WListManager;
-    class UDQ;
+    class UDQInput;
 
     class Schedule {
     public:
@@ -114,6 +114,12 @@ namespace Opm
         size_t numWells(size_t timestep) const;
         size_t getMaxNumConnectionsForWells(size_t timestep) const;
         bool hasWell(const std::string& wellName) const;
+
+        std::vector<std::string> wellNames(const std::string& pattern, size_t timeStep, const std::vector<std::string>& matching_wells = {}) const;
+        std::vector<std::string> wellNames(const std::string& pattern) const;
+        std::vector<std::string> wellNames(size_t timeStep) const;
+        std::vector<std::string> wellNames() const;
+
         const Well* getWell(const std::string& wellName) const;
         std::vector< const Well* > getOpenWells(size_t timeStep) const;
         std::vector< const Well* > getWells() const;
@@ -132,12 +138,11 @@ namespace Opm
         std::vector< const Group* > getChildGroups(const std::string& group_name, size_t timeStep) const;
         std::vector< const Well* > getWells(const std::string& group, size_t timeStep) const;
         std::vector< const Well* > getChildWells(const std::string& group_name, size_t timeStep) const;
-        std::vector< const Well* > getWellsMatching( const std::string& ) const;
         const OilVaporizationProperties& getOilVaporizationProperties(size_t timestep) const;
 
         const WellTestConfig& wtestConfig(size_t timestep) const;
         const WListManager& getWListManager(size_t timeStep) const;
-        const UDQ& getUDQConfig(size_t timeStep) const;
+        const UDQInput& getUDQConfig(size_t timeStep) const;
         const Actions& actions() const;
         void evalAction(const SummaryState& summary_state, size_t timeStep);
 
@@ -153,6 +158,8 @@ namespace Opm
         void invalidNamePattern (const std::string& namePattern, const ParseContext& parseContext, ErrorGuard& errors, const DeckKeyword& keyword) const;
 
         const Events& getEvents() const;
+        const Events& getWellEvents(const std::string& well) const;
+        bool hasWellEvent(const std::string& well, uint64_t event_mask, size_t reportStep) const;
         const Deck& getModifierDeck(size_t timeStep) const;
         bool hasOilVaporizationProperties() const;
         const VFPProdTable& getVFPProdTable(int table_id, size_t timeStep) const;
@@ -169,8 +176,8 @@ namespace Opm
         void applyAction(size_t reportStep, const ActionX& action, const std::vector<std::string>& matching_wells);
     private:
         TimeMap m_timeMap;
-        OrderedMap< Well > m_wells;
-        OrderedMap< Group > m_groups;
+        OrderedMap< std::string, Well > m_wells;
+        OrderedMap< std::string, Group > m_groups;
         DynamicState< GroupTree > m_rootGroupTree;
         DynamicState< OilVaporizationProperties > m_oilvaporizationproperties;
         Events m_events;
@@ -182,13 +189,14 @@ namespace Opm
         std::map<int, DynamicState<std::shared_ptr<VFPInjTable>>> vfpinj_tables;
         DynamicState<std::shared_ptr<WellTestConfig>> wtest_config;
         DynamicState<std::shared_ptr<WListManager>> wlist_manager;
-        DynamicState<std::shared_ptr<UDQ>> udq_config;
+        DynamicState<std::shared_ptr<UDQInput>> udq_config;
 
         WellProducer::ControlModeEnum m_controlModeWHISTCTL;
         Actions m_actions;
 
         std::vector< Well* > getWells(const std::string& wellNamePattern, const std::vector<std::string>& matching_wells = {});
         std::vector< Group* > getGroups(const std::string& groupNamePattern);
+        std::map<std::string,Events> well_events;
 
         void updateWellStatus( Well& well, size_t reportStep , WellCommon::StatusEnum status);
         void addWellToGroup( Group& newGroup , Well& well , size_t timeStep);
@@ -252,11 +260,12 @@ namespace Opm
                            const Eclipse3DProperties& eclipseProperties,
                            const UnitSystem& unit_system,
                            std::vector<std::pair<const DeckKeyword*, size_t > >& rftProperties);
-
-        static double convertInjectionRateToSI(double rawRate, WellInjector::TypeEnum wellType, const Opm::UnitSystem &unitSystem);
-        static double convertInjectionRateToSI(double rawRate, Phase wellPhase, const Opm::UnitSystem &unitSystem);
+        void addWellEvent(const std::string& well, ScheduleEvents::Events event, size_t reportStep);
         static bool convertEclipseStringToBool(const std::string& eclipseString);
 
+#ifdef CHECK_WELLS
+        bool checkWells(const ParseContext& parseContext, ErrorGuard& errors) const;
+#endif
     };
 }
 

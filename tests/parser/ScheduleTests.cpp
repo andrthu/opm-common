@@ -33,9 +33,9 @@
 #include <opm/parser/eclipse/EclipseState/Schedule/TimeMap.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Group.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/GroupTree.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/WellConnections.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/OilVaporizationProperties.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/WellConnections.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/SummaryState.hpp>
 
 #include <opm/parser/eclipse/Deck/Deck.hpp>
@@ -94,6 +94,9 @@ static Deck createDeckWTEST() {
             "     \'DEFAULT\'    \'OP\'   30   37  3.33       \'OIL\'  7*/   \n"
             "     \'ALLOW\'      \'OP\'   30   37  3.33       \'OIL\'  3*  YES / \n"
             "     \'BAN\'        \'OP\'   20   51  3.92       \'OIL\'  3*  NO /  \n"
+            "     \'W1\'         \'OP\'   20   51  3.92       \'OIL\'  3*  NO /  \n"
+            "     \'W2\'         \'OP\'   20   51  3.92       \'OIL\'  3*  NO /  \n"
+            "     \'W3\'         \'OP\'   20   51  3.92       \'OIL\'  3*  NO /  \n"
             "/\n"
 
             "COMPDAT\n"
@@ -123,6 +126,17 @@ static Deck createDeckWTEST() {
 
             "DATES             -- 2\n"
             " 10  JUL 2007 / \n"
+            "/\n"
+
+            "WELSPECS\n"
+            "     \'I1\'         \'OP\'   20   51  3.92       \'OIL\'  3*  NO /  \n"
+            "     \'I2\'         \'OP\'   20   51  3.92       \'OIL\'  3*  NO /  \n"
+            "     \'I3\'         \'OP\'   20   51  3.92       \'OIL\'  3*  NO /  \n"
+            "/\n"
+
+            "WLIST\n"
+            "  \'*ILIST\'  \'NEW\'  I1 /\n"
+            "  \'*ILIST\'  \'ADD\'  I2 /\n"
             "/\n"
 
             "WCONPROD\n"
@@ -526,27 +540,7 @@ BOOST_AUTO_TEST_CASE(WellsIterator_HasWells_WellsReturned) {
     BOOST_CHECK_EQUAL(3U, wells_t3.size());
 }
 
-BOOST_AUTO_TEST_CASE(WellsIteratorWithRegex_HasWells_WellsReturned) {
-    EclipseGrid grid(10,10,10);
-    auto deck = createDeckWithWells();
-    TableManager table ( deck );
-    Eclipse3DProperties eclipseProperties ( deck , table, grid);
-    Runspec runspec (deck);
-    Schedule schedule(deck, grid , eclipseProperties, runspec);
-    std::string wellNamePattern;
 
-    wellNamePattern = "*";
-    auto wells = schedule.getWellsMatching(wellNamePattern);
-    BOOST_CHECK_EQUAL(3U, wells.size());
-
-    wellNamePattern = "W_*";
-    wells = schedule.getWellsMatching(wellNamePattern);
-    BOOST_CHECK_EQUAL(2U, wells.size());
-
-    wellNamePattern = "W_3";
-    wells = schedule.getWellsMatching(wellNamePattern);
-    BOOST_CHECK_EQUAL(1U, wells.size());
-}
 
 BOOST_AUTO_TEST_CASE(ReturnNumWellsTimestep) {
     EclipseGrid grid(10,10,10);
@@ -807,11 +801,11 @@ BOOST_AUTO_TEST_CASE(CreateScheduleDeckWithWELOPEN_CombineShutCompletionsAndAddN
   auto* well = schedule.getWell("OP_1");
   // timestep 3. Close all completions with WELOPEN and immediately open new completions with COMPDAT.
   BOOST_CHECK_EQUAL(WellCommon::StatusEnum::OPEN, well->getStatus(3));
-  BOOST_CHECK( !well->hasEvent( ScheduleEvents::WELL_STATUS_CHANGE , 3 ));
+  BOOST_CHECK( !schedule.hasWellEvent( "OP_1", ScheduleEvents::WELL_STATUS_CHANGE , 3 ));
   // timestep 4. Close all completions with WELOPEN. The well will be shut since no completions
   // are open.
   BOOST_CHECK_EQUAL(WellCommon::StatusEnum::SHUT, well->getStatus(4));
-  BOOST_CHECK( well->hasEvent( ScheduleEvents::WELL_STATUS_CHANGE , 4 ));
+  BOOST_CHECK( schedule.hasWellEvent( "OP_1", ScheduleEvents::WELL_STATUS_CHANGE , 4 ));
   // timestep 5. Open new completions. But keep the well shut,
   BOOST_CHECK_EQUAL(WellCommon::StatusEnum::SHUT, well->getStatus(5));
 }
@@ -1053,17 +1047,6 @@ BOOST_AUTO_TEST_CASE(createDeckWithWPIMULT) {
                     "/\n"
                     "DATES             -- 2\n"
                     " 20  JAN 2010 / \n"
-                    "/\n"
-                    "WELTARG\n"
-                    " OP_1     ORAT        1300 /\n"
-                    " OP_1     WRAT        1400 /\n"
-                    " OP_1     GRAT        1500.52 /\n"
-                    " OP_1     LRAT        1600.58 /\n"
-                    " OP_1     RESV        1801.05 /\n"
-                    " OP_1     BHP         1900 /\n"
-                    " OP_1     THP         2000 /\n"
-                    " OP_1     VFP         2100.09 /\n"
-                    " OP_1     GUID        2300.14 /\n"
                     "/\n"
                     "WPIMULT\n"
                     "OP_1  1.30 /\n"
@@ -1744,6 +1727,13 @@ BOOST_AUTO_TEST_CASE( COMPDAT_sets_automatic_complnum ) {
     std::string input = R"(
         START             -- 0
         19 JUN 2007 /
+        GRID
+        PERMX
+          1000*0.10/
+        COPY
+          PERMX PERMY /
+          PERMX PERMZ /
+        /
         SCHEDULE
         DATES             -- 1
             10  OKT 2008 /
@@ -1791,6 +1781,13 @@ BOOST_AUTO_TEST_CASE( COMPDAT_multiple_wells ) {
     std::string input = R"(
         START             -- 0
         19 JUN 2007 /
+        GRID
+        PERMX
+          1000*0.10/
+        COPY
+          PERMX PERMY /
+          PERMX PERMZ /
+        /
         SCHEDULE
         DATES             -- 1
             10  OKT 2008 /
@@ -1839,6 +1836,13 @@ BOOST_AUTO_TEST_CASE( COMPDAT_multiple_records_same_completion ) {
     std::string input = R"(
         START             -- 0
         19 JUN 2007 /
+        GRID
+        PERMX
+          1000*0.10/
+        COPY
+          PERMX PERMY /
+          PERMX PERMZ /
+        /
         SCHEDULE
         DATES             -- 1
             10  OKT 2008 /
@@ -1873,6 +1877,13 @@ BOOST_AUTO_TEST_CASE( complump_less_than_1 ) {
     std::string input = R"(
             START             -- 0
             19 JUN 2007 /
+            GRID
+            PERMX
+              1000*0.10/
+            COPY
+              PERMX PERMY /
+              PERMX PERMZ /
+            /
             SCHEDULE
 
             WELSPECS
@@ -1900,6 +1911,13 @@ BOOST_AUTO_TEST_CASE( complump ) {
     std::string input = R"(
             START             -- 0
             19 JUN 2007 /
+            GRID
+            PERMX
+              1000*0.10/
+            COPY
+              PERMX PERMY /
+              PERMX PERMZ /
+            /
             SCHEDULE
 
             WELSPECS
@@ -1978,6 +1996,13 @@ BOOST_AUTO_TEST_CASE( COMPLUMP_specific_coordinates ) {
     std::string input = R"(
         START             -- 0
         19 JUN 2007 /
+        GRID
+        PERMX
+          1000*0.10/
+        COPY
+          PERMX PERMY /
+          PERMX PERMZ /
+        /
         SCHEDULE
 
         WELSPECS
@@ -2587,16 +2612,26 @@ BOOST_AUTO_TEST_CASE(FilterCompletions) {
   Runspec runspec (deck);
   Schedule schedule(deck, grid1 , eclipseProperties, runspec);
   const auto& well = schedule.getWell("OP_1");
-  const auto& c1_1 = well->getConnections(1);
-  const auto& c1_3 = well->getConnections(3);
-  BOOST_CHECK_EQUAL(2, c1_1.size());
-  BOOST_CHECK_EQUAL(9, c1_3.size());
+  {
+      const auto& c1_1 = well->getConnections(1);
+      const auto& c1_3 = well->getConnections(3);
+      BOOST_CHECK_EQUAL(2, c1_1.size());
+      BOOST_CHECK_EQUAL(9, c1_3.size());
+  }
   actnum[grid1.getGlobalIndex(8,8,1)] = 0;
   {
       EclipseGrid grid2(grid1, actnum);
       schedule.filterConnections(grid2);
+
+      const auto& c1_1 = well->getConnections(1);
+      const auto& c1_3 = well->getConnections(3);
       BOOST_CHECK_EQUAL(1, c1_1.size());
       BOOST_CHECK_EQUAL(8, c1_3.size());
+
+      BOOST_CHECK_EQUAL(2, c1_1.inputSize());
+      BOOST_CHECK_EQUAL(9, c1_3.inputSize());
+
+      BOOST_CHECK_EQUAL( well->getTotNoConn(), 9);
   }
 }
 
@@ -2606,6 +2641,13 @@ BOOST_AUTO_TEST_CASE(VFPINJ_TEST) {
 START\n \
 8 MAR 1998 /\n \
 \n \
+GRID \n\
+PERMX \n\
+  1000*0.10/ \n\
+COPY \n\
+  PERMX PERMY / \n\
+  PERMX PERMZ / \n\
+/ \n \
 SCHEDULE \n\
 VFPINJ \n                                       \
 -- Table Depth  Rate   TAB  UNITS  BODY    \n\
@@ -2733,6 +2775,13 @@ BOOST_AUTO_TEST_CASE(POLYINJ_TEST) {
     const char *deckData =
         "START\n"
         "   8 MAR 2018/\n"
+        "GRID\n"
+        "PERMX\n"
+        "  1000*0.25 /\n"
+        "COPY\n"
+        "  PERMX  PERMY /\n"
+        "  PERMX  PERMZ /\n"
+        "/\n"
         "PROPS\n \n"
         "SCHEDULE\n"
         "WELSPECS\n"
@@ -2815,4 +2864,79 @@ BOOST_AUTO_TEST_CASE(WTEST_CONFIG) {
     BOOST_CHECK(wtest_config2.has("BAN"));
     BOOST_CHECK(wtest_config2.has("BAN", WellTestConfig::Reason::GROUP));
     BOOST_CHECK(!wtest_config2.has("BAN", WellTestConfig::Reason::PHYSICAL));
+}
+
+
+bool has(const std::vector<std::string>& l, const std::string& s) {
+    auto f = std::find(l.begin(), l.end(), s);
+    return (f != l.end());
+}
+
+
+
+BOOST_AUTO_TEST_CASE(WellNames) {
+    auto deck = createDeckWTEST();
+    EclipseGrid grid1(10,10,10);
+    TableManager table ( deck );
+    Eclipse3DProperties eclipseProperties ( deck , table, grid1);
+    Runspec runspec (deck);
+    Schedule schedule(deck, grid1 , eclipseProperties, runspec);
+
+    auto names = schedule.wellNames("NO_SUCH_WELL", 0);
+    BOOST_CHECK_EQUAL(names.size(), 0);
+
+    auto w1names = schedule.wellNames("W1", 0);
+    BOOST_CHECK_EQUAL(w1names.size(), 1);
+    BOOST_CHECK_EQUAL(w1names[0], "W1");
+
+    auto i1names = schedule.wellNames("11", 0);
+    BOOST_CHECK_EQUAL(i1names.size(), 0);
+
+    auto listnamese = schedule.wellNames("*NO_LIST", 0);
+    BOOST_CHECK_EQUAL( listnamese.size(), 0);
+
+    auto listnames0 = schedule.wellNames("*ILIST", 0);
+    BOOST_CHECK_EQUAL( listnames0.size(), 0);
+
+    auto listnames1 = schedule.wellNames("*ILIST", 2);
+    BOOST_CHECK_EQUAL( listnames1.size(), 2);
+    BOOST_CHECK( has(listnames1, "I1"));
+    BOOST_CHECK( has(listnames1, "I2"));
+
+    auto pnames1 = schedule.wellNames("I*", 0);
+    BOOST_CHECK_EQUAL(pnames1.size(), 0);
+
+    auto pnames2 = schedule.wellNames("W*", 0);
+    BOOST_CHECK_EQUAL(pnames2.size(), 3);
+    BOOST_CHECK( has(pnames2, "W1"));
+    BOOST_CHECK( has(pnames2, "W2"));
+    BOOST_CHECK( has(pnames2, "W3"));
+
+    auto anames = schedule.wellNames("?", 0, {"W1", "W2"});
+    BOOST_CHECK_EQUAL(anames.size(), 2);
+    BOOST_CHECK(has(anames, "W1"));
+    BOOST_CHECK(has(anames, "W2"));
+
+    auto all_names0 = schedule.wellNames("*", 0);
+    BOOST_CHECK_EQUAL( all_names0.size(), 6);
+    BOOST_CHECK( has(all_names0, "W1"));
+    BOOST_CHECK( has(all_names0, "W2"));
+    BOOST_CHECK( has(all_names0, "W3"));
+    BOOST_CHECK( has(all_names0, "DEFAULT"));
+    BOOST_CHECK( has(all_names0, "ALLOW"));
+
+    auto all_names = schedule.wellNames("*", 2);
+    BOOST_CHECK_EQUAL( all_names.size(), 9);
+    BOOST_CHECK( has(all_names, "I1"));
+    BOOST_CHECK( has(all_names, "I2"));
+    BOOST_CHECK( has(all_names, "I3"));
+    BOOST_CHECK( has(all_names, "W1"));
+    BOOST_CHECK( has(all_names, "W2"));
+    BOOST_CHECK( has(all_names, "W3"));
+    BOOST_CHECK( has(all_names, "DEFAULT"));
+    BOOST_CHECK( has(all_names, "ALLOW"));
+    BOOST_CHECK( has(all_names, "BAN"));
+
+    auto abs_all = schedule.wellNames();
+    BOOST_CHECK_EQUAL(abs_all.size(), 9);
 }

@@ -1,18 +1,18 @@
 /*
   Copyright 2018 NORCE
-  
+
   This file is part of the Open Porous Media project (OPM).
-  
+
   OPM is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
-  
+
   OPM is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
-  
+
   You should have received a copy of the GNU General Public License
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
@@ -24,7 +24,7 @@
 
 #include <opm/parser/eclipse/EclipseState/Grid/EclipseGrid.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
 #include <opm/parser/eclipse/Deck/Deck.hpp>
 #include <opm/parser/eclipse/Deck/DeckItem.hpp>
 #include <opm/parser/eclipse/Deck/DeckKeyword.hpp>
@@ -36,6 +36,13 @@ using namespace Opm;
 static Deck createDeckWithOutTracer() {
     Opm::Parser parser;
     std::string input =
+            "GRID\n"
+            "PERMX\n"
+            "   1000*0.25/\n"
+            "COPY\n"
+            "  PERMX PERMY /\n"
+            "  PERMX PERMZ /\n"
+            "/\n"
             "SCHEDULE\n"
             "WELSPECS\n"
             "     'W_1'        'OP'   2   2  1*       \'OIL\'  7* /   \n"
@@ -55,6 +62,13 @@ static Deck createDeckWithDynamicWTRACER() {
     std::string input =
             "START             -- 0 \n"
             "1 JAN 2000 / \n"
+            "GRID\n"
+            "PERMX\n"
+            "   1000*0.25/\n"
+            "COPY\n"
+            "  PERMX PERMY /\n"
+            "  PERMX PERMZ /\n"
+            "/\n"
             "SCHEDULE\n"
             "WELSPECS\n"
             "     'W_1'        'OP'   1   1  1*       \'GAS\'  7* /   \n"
@@ -90,6 +104,13 @@ static Deck createDeckWithTracerInProducer() {
     std::string input =
             "START             -- 0 \n"
             "1 JAN 2000 / \n"
+            "GRID\n"
+            "PERMX\n"
+            "   1000*0.25/\n"
+            "COPY\n"
+            "  PERMX PERMY /\n"
+            "  PERMX PERMZ /\n"
+            "/\n"
             "SCHEDULE\n"
             "WELSPECS\n"
             "     'W_1'        'OP'   1   1  1*       \'GAS\'  7* /   \n"
@@ -130,15 +151,15 @@ BOOST_AUTO_TEST_CASE(TestDynamicWTRACER) {
     const auto& keyword = deck.getKeyword("WTRACER");
     BOOST_CHECK_EQUAL(keyword.size(),1);
     const auto& record = keyword.getRecord(0);
-    const std::string& wellNamesPattern = record.getItem("WELL").getTrimmedString(0);
-    auto wells_Tracer = schedule.getWellsMatching(wellNamesPattern);
-    BOOST_CHECK_EQUAL(wellNamesPattern, "W_1");
-    BOOST_CHECK_EQUAL(wells_Tracer[0]->getTracerProperties(0).getConcentration("I1"),0); //default 0
-    BOOST_CHECK_EQUAL(wells_Tracer[0]->getTracerProperties(0).getConcentration("I2"),0); //default 0
-    BOOST_CHECK_EQUAL(wells_Tracer[0]->getTracerProperties(1).getConcentration("I1"),1);
-    BOOST_CHECK_EQUAL(wells_Tracer[0]->getTracerProperties(2).getConcentration("I1"),1);
-    BOOST_CHECK_EQUAL(wells_Tracer[0]->getTracerProperties(4).getConcentration("I1"),0);
-    BOOST_CHECK_EQUAL(wells_Tracer[0]->getTracerProperties(4).getConcentration("I2"),1);
+    const std::string& well_name = record.getItem("WELL").getTrimmedString(0);
+    BOOST_CHECK_EQUAL(well_name, "W_1");
+    const auto* well = schedule.getWell(well_name);
+    BOOST_CHECK_EQUAL(well->getTracerProperties(0).getConcentration("I1"),0); //default 0
+    BOOST_CHECK_EQUAL(well->getTracerProperties(0).getConcentration("I2"),0); //default 0
+    BOOST_CHECK_EQUAL(well->getTracerProperties(1).getConcentration("I1"),1);
+    BOOST_CHECK_EQUAL(well->getTracerProperties(2).getConcentration("I1"),1);
+    BOOST_CHECK_EQUAL(well->getTracerProperties(4).getConcentration("I1"),0);
+    BOOST_CHECK_EQUAL(well->getTracerProperties(4).getConcentration("I2"),1);
 }
 
 

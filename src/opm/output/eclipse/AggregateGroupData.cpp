@@ -25,8 +25,8 @@
 #include <opm/parser/eclipse/EclipseState/Schedule/SummaryState.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/ScheduleEnums.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/GroupTree.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -185,7 +185,8 @@ namespace {
 	      throw std::invalid_argument("group has both wells and child groups" + group.name());
             int igrpCount = 0;
 	    if (childWells.size() != 0) {
-		//group has child wells
+		//group has child wells 
+		//store the well number (sequence index) in iGrp according to the sequence they are defined
 		for ( auto it = childWells.begin() ; it != childWells.end(); it++) {
 		    iGrp[igrpCount] = (*it)->seqIndex()+1;
 		    igrpCount+=1;
@@ -195,6 +196,7 @@ namespace {
 		//group has child groups
 		//The field group always has seqIndex = 0 because it is always defined first
 	        //Hence the all groups except the Field group uses the seqIndex assigned
+		//iGrp contains the child groups in ascending group sequence index
 		std::vector<size_t> childGroupIndex;
 		Opm::RestartIO::Helpers::groupMaps groupMap;
 		groupMap.currentGrpTreeNameSeqIndMap(sched, simStep, groupMapNameIndex,mapIndexGroup);

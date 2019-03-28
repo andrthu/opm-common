@@ -17,11 +17,11 @@
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <ert/util/util.h>
 #include <cstdlib>
 #include <iostream>
 
 #include <boost/algorithm/string.hpp>
+#include <ert/util/util.h>
 
 #include <opm/parser/eclipse/Parser/ErrorGuard.hpp>
 #include <opm/parser/eclipse/Parser/InputErrorAction.hpp>
@@ -94,6 +94,8 @@ namespace Opm {
         addKey(SUMMARY_UNKNOWN_WELL, InputError::THROW_EXCEPTION);
         addKey(SUMMARY_UNKNOWN_GROUP, InputError::THROW_EXCEPTION);
         addKey(SUMMARY_UNHANDLED_KEYWORD, InputError::WARN);
+        addKey(SUMMARY_UNDEFINED_UDQ, InputError::WARN);
+        addKey(SUMMARY_UDQ_MISSING_UNIT, InputError::WARN);
         addKey(SCHEDULE_INVALID_NAME, InputError::THROW_EXCEPTION);
 
         addKey(ACTIONX_ILLEGAL_KEYWORD, InputError::THROW_EXCEPTION);
@@ -103,6 +105,8 @@ namespace Opm {
 
         addKey(SIMULATOR_KEYWORD_NOT_SUPPORTED, InputError::WARN);
         addKey(SIMULATOR_KEYWORD_ITEM_NOT_SUPPORTED, InputError::WARN);
+
+        addKey(UDQ_PARSE_ERROR, InputError::THROW_EXCEPTION);
     }
 
     void ParseContext::initEnv() {
@@ -321,6 +325,8 @@ namespace Opm {
     const std::string ParseContext::SUMMARY_UNKNOWN_WELL  = "SUMMARY_UNKNOWN_WELL";
     const std::string ParseContext::SUMMARY_UNKNOWN_GROUP = "SUMMARY_UNKNOWN_GROUP";
     const std::string ParseContext::SUMMARY_UNHANDLED_KEYWORD = "SUMMARY_UNHANDLED_KEYWORD";
+    const std::string ParseContext::SUMMARY_UNDEFINED_UDQ = "SUMMARY_UNDEFINED_UDQ";
+    const std::string ParseContext::SUMMARY_UDQ_MISSING_UNIT = "SUMMARY_UDQ_MISSING_UNIT";
 
     const std::string ParseContext::RPT_MIXED_STYLE = "RPT_MIXED_STYLE";
     const std::string ParseContext::RPT_UNKNOWN_MNEMONIC = "RPT_UNKNOWN_MNEMONIC";
@@ -330,4 +336,6 @@ namespace Opm {
 
     const std::string ParseContext::SIMULATOR_KEYWORD_NOT_SUPPORTED = "SIMULATOR_KEYWORD_NOT_SUPPORTED";
     const std::string ParseContext::SIMULATOR_KEYWORD_ITEM_NOT_SUPPORTED = "SIMULATOR_KEYWORD_ITEM_NOT_SUPPORTED";
+
+    const std::string ParseContext::UDQ_PARSE_ERROR = "UDQ_PARSE_ERROR";
 }

@@ -32,13 +32,13 @@
 
 #include <opm/parser/eclipse/EclipseState/EclipseState.hpp>
 #include <opm/parser/eclipse/EclipseState/Grid/EclipseGrid.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Connection.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/WellConnections.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/ScheduleEnums.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/Connection.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/WellConnections.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well/WellProductionProperties.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/TimeMap.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/WellProductionProperties.hpp>
 #include <opm/parser/eclipse/Parser/ParseContext.hpp>
 #include <opm/parser/eclipse/Parser/Parser.hpp>
 
@@ -771,7 +771,7 @@ namespace {
                 const std::string& cmode_string = whistctl_record.getItem("CMODE").getTrimmedString(0);
                 whistctl_cmode = Opm::WellProducer::ControlModeFromString(cmode_string);
             }
-            Opm::WellProductionProperties hist = Opm::WellProductionProperties::history(prev_p, record, whistctl_cmode, false);;
+            Opm::WellProductionProperties hist(record, false, prev_p, whistctl_cmode, false, false);
 
             return hist;
         }
@@ -820,11 +820,12 @@ namespace {
         properties(const std::string& input)
         {
             Opm::Parser parser;
-
             auto deck = parser.parseString(input);
             const auto& kwd     = deck.getKeyword("WCONPROD");
             const auto&  record = kwd.getRecord(0);
-            Opm::WellProductionProperties pred = Opm::WellProductionProperties::prediction( record, false );
+            Opm::WellProducer::ControlModeEnum whistctl_cmode = Opm::WellProducer::NONE;
+            Opm::WellProductionProperties prev_properties;
+            Opm::WellProductionProperties pred( record, true, prev_properties, whistctl_cmode, false, false );
 
             return pred;
         }
