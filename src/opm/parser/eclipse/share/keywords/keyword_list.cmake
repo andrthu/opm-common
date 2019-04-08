@@ -98,6 +98,7 @@ set( keywords
      000_Eclipse100/F/FAULTS
      000_Eclipse100/F/FIELD
      000_Eclipse100/F/FIELD_PROBE
+     000_Eclipse100/F/FILEUNIT
      000_Eclipse100/F/FILLEPS
      000_Eclipse100/F/FIPOWG
      000_Eclipse100/F/FIP_PROBE
@@ -137,11 +138,13 @@ set( keywords
      000_Eclipse100/I/IPCW
      000_Eclipse100/I/ISGCR
      000_Eclipse100/I/ISGL
+     000_Eclipse100/I/ISGLPC
      000_Eclipse100/I/ISGU
      000_Eclipse100/I/ISOGCR
      000_Eclipse100/I/ISOWCR
      000_Eclipse100/I/ISWCR
      000_Eclipse100/I/ISWL
+     000_Eclipse100/I/ISWLPC
      000_Eclipse100/I/ISWU
      000_Eclipse100/J/JFUNC
      000_Eclipse100/L/LAB
@@ -296,6 +299,7 @@ set( keywords
      000_Eclipse100/S/SGCWMIS
      000_Eclipse100/S/SGFN
      000_Eclipse100/S/SGL
+     000_Eclipse100/S/SGLPC
      000_Eclipse100/S/SGOF
      000_Eclipse100/S/SGU
      000_Eclipse100/S/SGWFN
@@ -332,6 +336,7 @@ set( keywords
      000_Eclipse100/S/SWCR
      000_Eclipse100/S/SWFN
      000_Eclipse100/S/SWL
+     000_Eclipse100/S/SWLPC
      000_Eclipse100/S/SWOF
      000_Eclipse100/S/SWU
      000_Eclipse100/T/TABDIMS
@@ -340,6 +345,7 @@ set( keywords
      000_Eclipse100/T/THCONR
      000_Eclipse100/T/THERMAL
      000_Eclipse100/T/THPRES
+     000_Eclipse100/T/THPRESFT
      000_Eclipse100/T/TITLE
      000_Eclipse100/T/TLMIXPAR
      000_Eclipse100/T/TNUM

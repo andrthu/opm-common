@@ -94,6 +94,7 @@ if(ENABLE_ECL_INPUT)
     src/opm/parser/eclipse/EclipseState/Schedule/MSW/WellSegments.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/MSW/updatingConnectionsWithSegments.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/OilVaporizationProperties.cpp
+    src/opm/parser/eclipse/EclipseState/Schedule/RFTConfig.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Schedule.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/ScheduleEnums.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/SummaryState.cpp
@@ -272,6 +273,7 @@ if(ENABLE_ECL_OUTPUT)
           tests/test_AggregateWellData.cpp
           tests/test_AggregateGroupData.cpp
           tests/test_AggregateMSWData.cpp
+          tests/test_AggregateConnectionData.cpp
           tests/test_ArrayDimChecker.cpp
           tests/test_CharArrayNullTerm.cpp
           tests/test_EclipseIO.cpp
@@ -510,6 +512,7 @@ if(ENABLE_ECL_INPUT)
        opm/parser/eclipse/EclipseState/Schedule/Well/WellConnections.hpp
        opm/parser/eclipse/EclipseState/Schedule/DynamicVector.hpp
        opm/parser/eclipse/EclipseState/Schedule/SummaryState.hpp
+       opm/parser/eclipse/EclipseState/Schedule/RFTConfig.hpp
        opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp
        opm/parser/eclipse/EclipseState/Schedule/Tuning.hpp
        opm/parser/eclipse/EclipseState/Schedule/Group.hpp
