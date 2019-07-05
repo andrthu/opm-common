@@ -21,7 +21,6 @@
 #	                      the library needs it.
 
 list (APPEND MAIN_SOURCE_FILES
-      examples/test_util/EclFile.cpp
       src/opm/common/data/SimulationDataContainer.cpp
       src/opm/common/OpmLog/CounterLog.cpp
       src/opm/common/OpmLog/EclipsePRTLog.cpp
@@ -46,6 +45,7 @@ if(ENABLE_ECL_INPUT)
     src/opm/parser/eclipse/Deck/DeckRecord.cpp
     src/opm/parser/eclipse/Deck/DeckOutput.cpp
     src/opm/parser/eclipse/Deck/Section.cpp
+    src/opm/parser/eclipse/Deck/UDAValue.cpp
     src/opm/parser/eclipse/EclipseState/AquiferCT.cpp
     src/opm/parser/eclipse/EclipseState/Aquifetp.cpp
     src/opm/parser/eclipse/EclipseState/Aquancon.cpp
@@ -72,6 +72,7 @@ if(ENABLE_ECL_INPUT)
     src/opm/parser/eclipse/EclipseState/Grid/setKeywordBox.cpp
     src/opm/parser/eclipse/EclipseState/Grid/TransMult.cpp
     src/opm/parser/eclipse/EclipseState/InitConfig/Equil.cpp
+    src/opm/parser/eclipse/EclipseState/InitConfig/FoamConfig.cpp
     src/opm/parser/eclipse/EclipseState/InitConfig/InitConfig.cpp
     src/opm/parser/eclipse/EclipseState/IOConfig/IOConfig.cpp
     src/opm/parser/eclipse/EclipseState/IOConfig/RestartConfig.cpp
@@ -87,7 +88,7 @@ if(ENABLE_ECL_INPUT)
     src/opm/parser/eclipse/EclipseState/Schedule/Events.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Group.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/GroupTree.cpp
-    src/opm/parser/eclipse/EclipseState/Schedule/injection.cpp
+    src/opm/parser/eclipse/EclipseState/Schedule/Well/injection.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/MessageLimits.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/MSW/Compsegs.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/MSW/Segment.cpp
@@ -101,11 +102,13 @@ if(ENABLE_ECL_INPUT)
     src/opm/parser/eclipse/EclipseState/Schedule/TimeMap.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Tuning.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Well/Connection.cpp
-    src/opm/parser/eclipse/EclipseState/Schedule/Well/Well.cpp
+    src/opm/parser/eclipse/EclipseState/Schedule/Well/well_uda.cpp
+    src/opm/parser/eclipse/EclipseState/Schedule/Well/Well2.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Well/WellConnections.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Well/WList.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Well/WListManager.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Well/WellEconProductionLimits.cpp
+    src/opm/parser/eclipse/EclipseState/Schedule/Well/WellFoamProperties.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Well/WellInjectionProperties.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Well/WellPolymerProperties.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/Well/WellTracerProperties.cpp
@@ -132,7 +135,6 @@ if(ENABLE_ECL_INPUT)
     src/opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQParams.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQParser.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQSet.cpp
-    src/opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQWellSet.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQAssign.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQDefine.cpp
     src/opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQEnums.cpp
@@ -164,6 +166,14 @@ if(ENABLE_ECL_INPUT)
 endif()
 if(ENABLE_ECL_OUTPUT)
   list( APPEND MAIN_SOURCE_FILES
+          src/opm/io/eclipse/EclFile.cpp
+          src/opm/io/eclipse/EclOutput.cpp
+          src/opm/io/eclipse/EclUtil.cpp
+          src/opm/io/eclipse/EGrid.cpp
+          src/opm/io/eclipse/ERft.cpp
+          src/opm/io/eclipse/ERst.cpp
+          src/opm/io/eclipse/ESmry.cpp
+          src/opm/io/eclipse/OutputStream.cpp
           src/opm/output/eclipse/AggregateConnectionData.cpp
           src/opm/output/eclipse/AggregateGroupData.cpp
           src/opm/output/eclipse/AggregateMSWData.cpp
@@ -171,12 +181,10 @@ if(ENABLE_ECL_OUTPUT)
           src/opm/output/eclipse/CreateDoubHead.cpp
           src/opm/output/eclipse/CreateInteHead.cpp
           src/opm/output/eclipse/CreateLogiHead.cpp
-          src/opm/output/eclipse/WellDataSerializers.cpp
           src/opm/output/eclipse/DoubHEAD.cpp
           src/opm/output/eclipse/EclipseGridInspector.cpp
           src/opm/output/eclipse/EclipseIO.cpp
           src/opm/output/eclipse/InteHEAD.cpp
-          src/opm/output/eclipse/libECLRestart.cpp
           src/opm/output/eclipse/LinearisedOutputTable.cpp
           src/opm/output/eclipse/LoadRestart.cpp
           src/opm/output/eclipse/LogiHEAD.cpp
@@ -185,12 +193,12 @@ if(ENABLE_ECL_OUTPUT)
           src/opm/output/eclipse/Tables.cpp
           src/opm/output/eclipse/RegionCache.cpp
           src/opm/output/eclipse/RestartValue.cpp
+          src/opm/output/eclipse/WriteInit.cpp
           src/opm/output/data/Solution.cpp
       )
 endif()
 
 list (APPEND TEST_SOURCE_FILES
-      tests/test_EclFile.cpp
       tests/test_calculateCellVol.cpp
       tests/test_cmp.cpp
       tests/test_cubic.cpp
@@ -224,6 +232,7 @@ if(ENABLE_ECL_INPUT)
     tests/parser/EventTests.cpp
     tests/parser/FaceDirTests.cpp
     tests/parser/FaultTests.cpp
+    tests/parser/FoamTests.cpp
     tests/parser/FunctionalTests.cpp
     tests/parser/GeomodifierTests.cpp
     tests/parser/GridPropertyTests.cpp
@@ -275,13 +284,14 @@ if(ENABLE_ECL_OUTPUT)
           tests/test_AggregateMSWData.cpp
           tests/test_AggregateConnectionData.cpp
           tests/test_ArrayDimChecker.cpp
-          tests/test_CharArrayNullTerm.cpp
           tests/test_EclipseIO.cpp
           tests/test_DoubHEAD.cpp
           tests/test_InteHEAD.cpp
           tests/test_LinearisedOutputTable.cpp
           tests/test_LogiHEAD.cpp
+          tests/test_OutputStream.cpp
           tests/test_regionCache.cpp
+          tests/test_PaddedOutputString.cpp
           tests/test_Restart.cpp
           tests/test_RFT.cpp
           tests/test_Solution.cpp
@@ -290,8 +300,6 @@ if(ENABLE_ECL_OUTPUT)
           tests/test_Wells.cpp
           tests/test_WindowedArray.cpp
           tests/test_writenumwells.cpp
-          tests/test_serialize_ICON.cpp
-          tests/test_serialize_SCON.cpp
       )
 endif()
 
@@ -312,6 +320,7 @@ if(ENABLE_ECL_OUTPUT)
           tests/SUMMARY_EFF_FAC.DATA
           tests/SPE1CASE1.DATA
           tests/SPE1CASE1.SMSPEC
+          tests/SPE1CASE1A.SMSPEC
           tests/SPE9_CP_PACKED.DATA
           tests/SOFR_TEST.DATA
       )
@@ -320,6 +329,20 @@ endif()
 list (APPEND EXAMPLE_SOURCE_FILES
 )
 if(ENABLE_ECL_INPUT)
+  list (APPEND TEST_DATA_FILES
+    tests/ECLFILE.INIT
+    tests/ECLFILE.FINIT
+    tests/SPE1CASE1.EGRID
+    tests/SPE1CASE1.RFT
+    tests/SPE1_TESTCASE.UNRST
+    tests/SPE1_TESTCASE.FUNRST
+    tests/SPE1_TESTCASE.F0025
+    tests/SPE1_TESTCASE.X0025
+    tests/SPE1CASE1.UNSMRY
+    tests/SPE1CASE1A.UNSMRY
+    tests/SPE1CASE1_RST60.SMSPEC
+    tests/SPE1CASE1_RST60.UNSMRY
+  )
   list (APPEND EXAMPLE_SOURCE_FILES
     examples/opmi.cpp
     examples/opmpack.cpp
@@ -340,8 +363,6 @@ if(ENABLE_ECL_INPUT)
 endif()
 
 list( APPEND PUBLIC_HEADER_FILES
-      examples/test_util/EclFile.hpp
-      examples/test_util/data/EclIOdata.hpp
       opm/common/ErrorMacros.hpp
       opm/common/Exceptions.hpp
       opm/common/data/SimulationDataContainer.hpp
@@ -398,6 +419,7 @@ if(ENABLE_ECL_INPUT)
        opm/parser/eclipse/Parser/ParserConst.hpp
        opm/parser/eclipse/EclipseState/InitConfig/InitConfig.hpp
        opm/parser/eclipse/EclipseState/InitConfig/Equil.hpp
+       opm/parser/eclipse/EclipseState/InitConfig/FoamConfig.hpp
        opm/parser/eclipse/EclipseState/Util/Value.hpp
        opm/parser/eclipse/EclipseState/Util/OrderedMap.hpp
        opm/parser/eclipse/EclipseState/SummaryConfig/SummaryConfig.hpp
@@ -460,6 +482,8 @@ if(ENABLE_ECL_INPUT)
        opm/parser/eclipse/EclipseState/Tables/TableContainer.hpp
        opm/parser/eclipse/EclipseState/Tables/AqutabTable.hpp
        opm/parser/eclipse/EclipseState/Tables/PlyadsTable.hpp
+       opm/parser/eclipse/EclipseState/Tables/FoamadsTable.hpp
+       opm/parser/eclipse/EclipseState/Tables/FoammobTable.hpp
        opm/parser/eclipse/EclipseState/Tables/PbvdTable.hpp
        opm/parser/eclipse/EclipseState/Tables/SorwmisTable.hpp
        opm/parser/eclipse/EclipseState/Tables/PlymaxTable.hpp
@@ -499,14 +523,15 @@ if(ENABLE_ECL_INPUT)
        opm/parser/eclipse/EclipseState/Schedule/VFPInjTable.hpp
        opm/parser/eclipse/EclipseState/Schedule/VFPProdTable.hpp
        opm/parser/eclipse/EclipseState/Schedule/Well/Connection.hpp
-       opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp
-       opm/parser/eclipse/EclipseState/Schedule/Well/WellInjectionProperties.hpp
+       opm/parser/eclipse/EclipseState/Schedule/Well/ProductionControls.hpp
+       opm/parser/eclipse/EclipseState/Schedule/Well/InjectionControls.hpp
+       opm/parser/eclipse/EclipseState/Schedule/Well/Well2.hpp
        opm/parser/eclipse/EclipseState/Schedule/Well/WList.hpp
        opm/parser/eclipse/EclipseState/Schedule/Well/WListManager.hpp
        opm/parser/eclipse/EclipseState/Schedule/Well/WellEconProductionLimits.hpp
+       opm/parser/eclipse/EclipseState/Schedule/Well/WellFoamProperties.hpp
        opm/parser/eclipse/EclipseState/Schedule/Well/WellPolymerProperties.hpp
        opm/parser/eclipse/EclipseState/Schedule/Well/WellTracerProperties.hpp
-       opm/parser/eclipse/EclipseState/Schedule/Well/WellProductionProperties.hpp
        opm/parser/eclipse/EclipseState/Schedule/Well/WellTestConfig.hpp
        opm/parser/eclipse/EclipseState/Schedule/Well/WellTestState.hpp
        opm/parser/eclipse/EclipseState/Schedule/Well/WellConnections.hpp
@@ -538,7 +563,6 @@ if(ENABLE_ECL_INPUT)
        opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQEnums.hpp
        opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQParams.hpp
        opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQInput.hpp
-       opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQWellSet.hpp
        opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQSet.hpp
        opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQFunction.hpp
        opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQFunctionTable.hpp
@@ -548,6 +572,7 @@ if(ENABLE_ECL_INPUT)
        opm/parser/eclipse/Deck/DeckOutput.hpp
        opm/parser/eclipse/Deck/DeckKeyword.hpp
        opm/parser/eclipse/Deck/DeckRecord.hpp
+       opm/parser/eclipse/Deck/UDAValue.hpp
        opm/parser/eclipse/RawDeck/StarToken.hpp
        opm/parser/eclipse/RawDeck/RawEnums.hpp
        opm/parser/eclipse/RawDeck/RawRecord.hpp
@@ -556,25 +581,34 @@ if(ENABLE_ECL_INPUT)
 endif()
 if(ENABLE_ECL_OUTPUT)
   list(APPEND PUBLIC_HEADER_FILES
+        opm/io/eclipse/EclFile.hpp
+        opm/io/eclipse/EclIOdata.hpp
+        opm/io/eclipse/EclOutput.hpp
+        opm/io/eclipse/EclUtil.hpp
+        opm/io/eclipse/EGrid.hpp
+        opm/io/eclipse/ERft.hpp
+        opm/io/eclipse/ERst.hpp
+        opm/io/eclipse/ESmry.hpp
+        opm/io/eclipse/PaddedOutputString.hpp
+        opm/io/eclipse/OutputStream.hpp
         opm/output/data/Cells.hpp
         opm/output/data/Solution.hpp
         opm/output/data/Wells.hpp
         opm/output/eclipse/VectorItems/connection.hpp
         opm/output/eclipse/VectorItems/group.hpp
         opm/output/eclipse/VectorItems/intehead.hpp
+        opm/output/eclipse/VectorItems/logihead.hpp
         opm/output/eclipse/VectorItems/msw.hpp
         opm/output/eclipse/VectorItems/well.hpp
         opm/output/eclipse/AggregateGroupData.hpp
         opm/output/eclipse/AggregateConnectionData.hpp
         opm/output/eclipse/AggregateMSWData.hpp
         opm/output/eclipse/AggregateWellData.hpp
-        opm/output/eclipse/CharArrayNullTerm.hpp
         opm/output/eclipse/DoubHEAD.hpp
         opm/output/eclipse/EclipseGridInspector.hpp
         opm/output/eclipse/EclipseIO.hpp
         opm/output/eclipse/EclipseIOUtil.hpp
         opm/output/eclipse/InteHEAD.hpp
-        opm/output/eclipse/libECLRestart.hpp
         opm/output/eclipse/LinearisedOutputTable.hpp
         opm/output/eclipse/LogiHEAD.hpp
         opm/output/eclipse/RegionCache.hpp
@@ -583,6 +617,7 @@ if(ENABLE_ECL_OUTPUT)
         opm/output/eclipse/Summary.hpp
         opm/output/eclipse/Tables.hpp
         opm/output/eclipse/WindowedArray.hpp
+        opm/output/eclipse/WriteInit.hpp
         opm/output/eclipse/WriteRestartHelpers.hpp
         opm/output/OutputWriter.hpp
         )

@@ -8,11 +8,7 @@ set(OPM_MACROS_ROOT ${PROJECT_SOURCE_DIR})
 option(ENABLE_ECL_INPUT "Enable eclipse input support?" ON)
 option(ENABLE_ECL_OUTPUT "Enable eclipse output support?" ON)
 option(ENABLE_MOCKSIM "Build the mock simulator for io testing" ON)
-option(ENABLE_WELL_TEST "Enable testing of well code when building Schedule object" OFF)
-
-if (ENABLE_WELL_TEST)
-  add_definitions(-DWELL_TEST)
-endif()
+option(OPM_ENABLE_PYTHON "Enable python bindings?" OFF)
 
 # Output implies input
 if(ENABLE_ECL_OUTPUT)
@@ -157,25 +153,55 @@ endif()
 
 # Build the compare utilities
 if(ENABLE_ECL_INPUT)
-  add_library(testutil STATIC
-              examples/test_util/EclFilesComparator.cpp
-              examples/test_util/EclIntegrationTest.cpp
-              examples/test_util/EclRegressionTest.cpp
-              examples/test_util/summaryComparator.cpp
-              examples/test_util/summaryIntegrationTest.cpp
-              examples/test_util/summaryRegressionTest.cpp)
-  target_link_libraries(testutil ecl)
-  add_executable(compareECL examples/test_util/compareECL.cpp)
-  target_link_libraries(compareECL testutil opmcommon)
+  add_executable(compareECL
+    test_util/EclFilesComparator.cpp
+    test_util/EclRegressionTest.cpp
+    test_util/compareECL.cpp
+    )
+
+  add_executable(convertECL
+    test_util/convertECL.cpp
+    )
+
+  foreach(target compareECL convertECL)
+    target_link_libraries(${target} opmcommon)
+    install(TARGETS ${target} DESTINATION bin)
+  endforeach()
 
   # Add the tests
-  set(_libs testutil opmcommon
+  set(_libs opmcommon
             ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
-  foreach(test test_compareSummary test_EclFilesComparator)
+
+  opm_add_test(test_EclFilesComparator
+    CONDITION
+      ENABLE_ECL_INPUT
+    SOURCES
+      tests/test_EclFilesComparator.cpp
+      test_util/EclFilesComparator.cpp
+    LIBRARIES
+      ${_libs}
+    WORKING_DIRECTORY
+      ${PROJECT_BINARY_DIR}/tests
+    )
+
+  opm_add_test(test_EclRegressionTest
+    CONDITION
+      ENABLE_ECL_INPUT
+    SOURCES
+      tests/test_EclRegressionTest.cpp
+      test_util/EclFilesComparator.cpp
+      test_util/EclRegressionTest.cpp
+    LIBRARIES
+      ${_libs}
+    WORKING_DIRECTORY
+      ${PROJECT_BINARY_DIR}/tests
+    )
+
+  foreach(test test_EclIO test_EGrid test_ERft test_ERst test_ESmry)
     opm_add_test(${test} CONDITION ENABLE_ECL_INPUT
-                         LIBRARIES ${_libs})
+                         LIBRARIES ${_libs}
+                         WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/tests)
   endforeach()
-  install(TARGETS compareECL DESTINATION bin)
 endif()
 
 # Install build system files
@@ -183,3 +209,10 @@ install(DIRECTORY cmake DESTINATION share/opm)
 
 # Install tab completion skeleton
 install(FILES etc/opm_bash_completion.sh.in DESTINATION share/opm/etc)
+
+if (OPM_ENABLE_PYTHON)
+  set_target_properties(opmcommon PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  add_subdirectory(python)
+endif()
+
+

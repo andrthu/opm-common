@@ -66,25 +66,25 @@ struct test_data {
 };
 
 
-double prod_opr(const EclipseState&  es, const Schedule& sched, const data::Solution& sol, size_t report_step, double seconds_elapsed) {
+double prod_opr(const EclipseState&  es, const Schedule& /* sched */, const SummaryState&, const data::Solution& /* sol */, size_t /* report_step */, double /* seconds_elapsed */) {
     const auto& units = es.getUnits();
     double oil_rate = 1.0;
     return -units.to_si(UnitSystem::measure::rate, oil_rate);
 }
 
-double prod_opr_low(const EclipseState&  es, const Schedule& sched, const data::Solution& sol, size_t report_step, double seconds_elapsed) {
+double prod_opr_low(const EclipseState&  es, const Schedule& /* sched */, const SummaryState&, const data::Solution& /* sol */, size_t /* report_step */, double /* seconds_elapsed */) {
     const auto& units = es.getUnits();
     double oil_rate = 0.5;
     return -units.to_si(UnitSystem::measure::rate, oil_rate);
 }
 
-double prod_wpr_P1(const EclipseState&  es, const Schedule& sched, const data::Solution& sol, size_t report_step, double seconds_elapsed) {
+double prod_wpr_P1(const EclipseState&  es, const Schedule& /* sched */, const SummaryState&, const data::Solution& /* sol */, size_t /* report_step */, double /* seconds_elapsed */) {
     const auto& units = es.getUnits();
     double water_rate = 0.0;
     return -units.to_si(UnitSystem::measure::rate, water_rate);
 }
 
-double prod_wpr_P2(const EclipseState&  es, const Schedule& sched, const data::Solution& sol, size_t report_step, double seconds_elapsed) {
+double prod_wpr_P2(const EclipseState&  es, const Schedule& /* sched */, const SummaryState&, const data::Solution& /* sol */, size_t report_step, double /* seconds_elapsed */) {
     const auto& units = es.getUnits();
     double water_rate = 0.0;
     if (report_step > 5)
@@ -93,19 +93,29 @@ double prod_wpr_P2(const EclipseState&  es, const Schedule& sched, const data::S
     return -units.to_si(UnitSystem::measure::rate, water_rate);
 }
 
-double prod_wpr_P3(const EclipseState&  es, const Schedule& sched, const data::Solution& sol, size_t report_step, double seconds_elapsed) {
+double prod_wpr_P3(const EclipseState&  es, const Schedule& /* sched */, const SummaryState&, const data::Solution& /* sol */, size_t /* report_step */, double /* seconds_elapsed */) {
     const auto& units = es.getUnits();
     double water_rate = 0.0;
     return -units.to_si(UnitSystem::measure::rate, water_rate);
 }
 
-double prod_wpr_P4(const EclipseState&  es, const Schedule& sched, const data::Solution& sol, size_t report_step, double seconds_elapsed) {
+double prod_wpr_P4(const EclipseState&  es, const Schedule& /* sched */, const SummaryState&, const data::Solution& /* sol */, size_t report_step, double /* seconds_elapsed */) {
     const auto& units = es.getUnits();
     double water_rate = 0.0;
     if (report_step > 10)
         water_rate = 2.0;
 
     return -units.to_si(UnitSystem::measure::rate, water_rate);
+}
+
+
+double inj_wir_INJ(const EclipseState& , const Schedule& sched, const SummaryState& st, const data::Solution& /* sol */, size_t report_step, double /* seconds_elapsed */) {
+    if (st.has("FUINJ")) {
+        const auto& well = sched.getWell2("INJ", report_step);
+        const auto controls = well.injectionControls(st);
+        return controls.surface_rate;
+    } else
+        return -99;
 }
 
 /*
@@ -128,16 +138,18 @@ BOOST_AUTO_TEST_CASE(UDQ_SORTA_EXAMPLE) {
         sim.well_rate("P3", data::Rates::opt::oil, prod_opr);
         sim.well_rate("P4", data::Rates::opt::oil, prod_opr_low);
 
-        sim.run(td.schedule, io);
+        sim.run(td.schedule, io, false);
         {
-            const auto& w1 = td.schedule.getWell("P1");
-            const auto& w4 = td.schedule.getWell("P4");
-            std::size_t last_step = td.schedule.size() - 1;
-
-            BOOST_CHECK_EQUAL(w1->getStatus(1), WellCommon::StatusEnum::OPEN );
-            BOOST_CHECK_EQUAL(w4->getStatus(1), WellCommon::StatusEnum::OPEN );
-            BOOST_CHECK_EQUAL(w1->getStatus(last_step), WellCommon::StatusEnum::OPEN );
-            BOOST_CHECK_EQUAL(w4->getStatus(last_step), WellCommon::StatusEnum::SHUT );
+            const auto& w1 = td.schedule.getWell2("P1", 1);
+            const auto& w4 = td.schedule.getWell2("P4", 1);
+            BOOST_CHECK_EQUAL(w1.getStatus(), WellCommon::StatusEnum::OPEN );
+            BOOST_CHECK_EQUAL(w4.getStatus(), WellCommon::StatusEnum::OPEN );
+        }
+        {
+            const auto& w1 = td.schedule.getWell2atEnd("P1");
+            const auto& w4 = td.schedule.getWell2atEnd("P4");
+            BOOST_CHECK_EQUAL(w1.getStatus(), WellCommon::StatusEnum::OPEN );
+            BOOST_CHECK_EQUAL(w4.getStatus(), WellCommon::StatusEnum::SHUT );
         }
 
         test_work_area_free(work_area);
@@ -165,36 +177,37 @@ BOOST_AUTO_TEST_CASE(WELL_CLOSE_EXAMPLE) {
         sim.well_rate("P4", data::Rates::opt::wat, prod_wpr_P4);
 
         {
-            const auto& w1 = td.schedule.getWell("P1");
-            const auto& w2 = td.schedule.getWell("P2");
-            const auto& w3 = td.schedule.getWell("P3");
-            const auto& w4 = td.schedule.getWell("P4");
+            const auto& w1 = td.schedule.getWell2("P1", 15);
+            const auto& w2 = td.schedule.getWell2("P2", 15);
+            const auto& w3 = td.schedule.getWell2("P3", 15);
+            const auto& w4 = td.schedule.getWell2("P4", 15);
 
-            BOOST_CHECK_EQUAL(w1->getStatus(15),  WellCommon::StatusEnum::OPEN );
-            BOOST_CHECK_EQUAL(w2->getStatus(15),  WellCommon::StatusEnum::OPEN );
-            BOOST_CHECK_EQUAL(w3->getStatus(15),  WellCommon::StatusEnum::OPEN );
-            BOOST_CHECK_EQUAL(w4->getStatus(15),  WellCommon::StatusEnum::OPEN );
+            BOOST_CHECK_EQUAL(w1.getStatus(),  WellCommon::StatusEnum::OPEN );
+            BOOST_CHECK_EQUAL(w2.getStatus(),  WellCommon::StatusEnum::OPEN );
+            BOOST_CHECK_EQUAL(w3.getStatus(),  WellCommon::StatusEnum::OPEN );
+            BOOST_CHECK_EQUAL(w4.getStatus(),  WellCommon::StatusEnum::OPEN );
         }
 
 
-        sim.run(td.schedule, io);
+        sim.run(td.schedule, io, false);
         {
-            const auto& w1 = td.schedule.getWell("P1");
-            const auto& w2 = td.schedule.getWell("P2");
-            const auto& w3 = td.schedule.getWell("P3");
-            const auto& w4 = td.schedule.getWell("P4");
-
-            BOOST_CHECK_EQUAL(w1->getStatus(15),  WellCommon::StatusEnum::OPEN );
-            BOOST_CHECK_EQUAL(w3->getStatus(15),  WellCommon::StatusEnum::OPEN );
-
-            BOOST_CHECK_EQUAL(w2->getStatus(5),  WellCommon::StatusEnum::OPEN );
-            BOOST_CHECK_EQUAL(w2->getStatus(6),  WellCommon::StatusEnum::SHUT );
-
-            BOOST_CHECK_EQUAL(w4->getStatus(10),  WellCommon::StatusEnum::OPEN );
-            BOOST_CHECK_EQUAL(w4->getStatus(11),  WellCommon::StatusEnum::SHUT );
+            const auto& w1 = td.schedule.getWell2("P1", 15);
+            const auto& w3 = td.schedule.getWell2("P3", 15);
+            BOOST_CHECK_EQUAL(w1.getStatus(),  WellCommon::StatusEnum::OPEN );
+            BOOST_CHECK_EQUAL(w3.getStatus(),  WellCommon::StatusEnum::OPEN );
         }
-
-
+        {
+            const auto& w2_5 = td.schedule.getWell2("P2", 5);
+            const auto& w2_6 = td.schedule.getWell2("P2", 6);
+            BOOST_CHECK_EQUAL(w2_5.getStatus(),  WellCommon::StatusEnum::OPEN );
+            BOOST_CHECK_EQUAL(w2_6.getStatus(),  WellCommon::StatusEnum::SHUT );
+        }
+        {
+            const auto& w4_10 = td.schedule.getWell2("P4", 10);
+            const auto& w4_11 = td.schedule.getWell2("P4", 11);
+            BOOST_CHECK_EQUAL(w4_10.getStatus(),  WellCommon::StatusEnum::OPEN );
+            BOOST_CHECK_EQUAL(w4_11.getStatus(),  WellCommon::StatusEnum::SHUT );
+        }
 
         test_work_area_free(work_area);
     }
@@ -219,28 +232,28 @@ BOOST_AUTO_TEST_CASE(UDQ_ASSIGN) {
         sim.well_rate("P3", data::Rates::opt::wat, prod_wpr_P3);
         sim.well_rate("P4", data::Rates::opt::wat, prod_wpr_P4);
 
-        sim.run(td.schedule, io);
+        sim.run(td.schedule, io, false);
 
         const auto& base_name = td.state.getIOConfig().getBaseName();
 
         ecl_sum_type * ecl_sum = ecl_sum_fread_alloc_case( base_name.c_str(), ":");
         BOOST_CHECK( ecl_sum_has_general_var(ecl_sum, "WUBHP:P1") );
         BOOST_CHECK( ecl_sum_has_general_var(ecl_sum, "WUBHP:P2") );
-        BOOST_CHECK( ecl_sum_has_general_var(ecl_sum, "WUOPR:P3") );
-        BOOST_CHECK( ecl_sum_has_general_var(ecl_sum, "WUOPR:P4") );
+        BOOST_CHECK( ecl_sum_has_general_var(ecl_sum, "WUOPRL:P3") );
+        BOOST_CHECK( ecl_sum_has_general_var(ecl_sum, "WUOPRL:P4") );
 
         BOOST_CHECK_EQUAL( ecl_sum_get_unit(ecl_sum, "WUBHP:P1"), "BARSA");
-        BOOST_CHECK_EQUAL( ecl_sum_get_unit(ecl_sum, "WUOPR:P1"), "SM3/DAY");
+        BOOST_CHECK_EQUAL( ecl_sum_get_unit(ecl_sum, "WUOPRL:P1"), "SM3/DAY");
 
         BOOST_CHECK_EQUAL( ecl_sum_get_general_var(ecl_sum, 1, "WUBHP:P1"), 11);
         BOOST_CHECK_EQUAL( ecl_sum_get_general_var(ecl_sum, 1, "WUBHP:P2"), 12);
         BOOST_CHECK_EQUAL( ecl_sum_get_general_var(ecl_sum, 1, "WUBHP:P3"), 13);
         BOOST_CHECK_EQUAL( ecl_sum_get_general_var(ecl_sum, 1, "WUBHP:P4"), 14);
 
-        BOOST_CHECK_EQUAL( ecl_sum_get_general_var(ecl_sum, 1, "WUOPR:P1"), 20);
-        BOOST_CHECK_EQUAL( ecl_sum_get_general_var(ecl_sum, 1, "WUOPR:P2"), 20);
-        BOOST_CHECK_EQUAL( ecl_sum_get_general_var(ecl_sum, 1, "WUOPR:P3"), 20);
-        BOOST_CHECK_EQUAL( ecl_sum_get_general_var(ecl_sum, 1, "WUOPR:P4"), 20);
+        BOOST_CHECK_EQUAL( ecl_sum_get_general_var(ecl_sum, 1, "WUOPRL:P1"), 20);
+        BOOST_CHECK_EQUAL( ecl_sum_get_general_var(ecl_sum, 1, "WUOPRL:P2"), 20);
+        BOOST_CHECK_EQUAL( ecl_sum_get_general_var(ecl_sum, 1, "WUOPRL:P3"), 20);
+        BOOST_CHECK_EQUAL( ecl_sum_get_general_var(ecl_sum, 1, "WUOPRL:P4"), 20);
         ecl_sum_free( ecl_sum );
 
         test_work_area_free(work_area);
@@ -266,23 +279,66 @@ BOOST_AUTO_TEST_CASE(UDQ_WUWCT) {
         sim.well_rate("P3", data::Rates::opt::wat, prod_wpr_P3);
         sim.well_rate("P4", data::Rates::opt::wat, prod_wpr_P4);
 
-        sim.run(td.schedule, io);
+        sim.run(td.schedule, io, false);
 
         const auto& base_name = td.state.getIOConfig().getBaseName();
         ecl_sum_type * ecl_sum = ecl_sum_fread_alloc_case( base_name.c_str(), ":");
-        for (const auto& well : {"P1", "P2", "P3", "P4"}) {
-            std::string wwct_key  = std::string("WWCT:") + well;
-            std::string wuwct_key = std::string("WUWCT:") + well;
 
-            BOOST_CHECK( ecl_sum_has_general_var(ecl_sum, wwct_key.c_str()));
-            BOOST_CHECK( ecl_sum_has_general_var(ecl_sum, wuwct_key.c_str()));
+        for (int step = 0; step < ecl_sum_get_data_length(ecl_sum); step++) {
+            double wopr_sum = 0;
+            for (const auto& well : {"P1", "P2", "P3", "P4"}) {
+                std::string wwct_key  = std::string("WWCT:") + well;
+                std::string wuwct_key = std::string("WUWCT:") + well;
+                std::string wopr_key  = std::string("WOPR:") + well;
 
-            for (int step = 0; step < ecl_sum_get_data_length(ecl_sum); step++)
                 BOOST_CHECK_EQUAL( ecl_sum_get_general_var(ecl_sum, step, wwct_key.c_str()),
                                    ecl_sum_get_general_var(ecl_sum, step, wuwct_key.c_str()));
 
+                wopr_sum += ecl_sum_get_general_var(ecl_sum, step , wopr_key.c_str());
+            }
+            BOOST_CHECK_EQUAL( ecl_sum_get_general_var(ecl_sum, step, "FOPR"),
+                               ecl_sum_get_general_var(ecl_sum, step, "FUOPR"));
+            BOOST_CHECK_EQUAL( wopr_sum, ecl_sum_get_general_var(ecl_sum, step, "FOPR"));
         }
 
+
         test_work_area_free(work_area);
+    }
+}
+
+
+BOOST_AUTO_TEST_CASE(UDA) {
+#include "uda.include"
+    test_data td( uda_deck );
+    msim sim(td.state);
+    EclipseIO io(td.state, td.state.getInputGrid(), td.schedule, td.summary_config);
+
+    sim.well_rate("P1", data::Rates::opt::wat, prod_wpr_P1);
+    sim.well_rate("P2", data::Rates::opt::wat, prod_wpr_P2);
+    sim.well_rate("P3", data::Rates::opt::wat, prod_wpr_P3);
+    sim.well_rate("P4", data::Rates::opt::wat, prod_wpr_P4);
+    sim.well_rate("INJ", data::Rates::opt::wat, inj_wir_INJ);
+    {
+        ecl::util::TestArea ta("uda_sim");
+
+        sim.run(td.schedule, io, true);
+
+        const auto& base_name = td.state.getIOConfig().getBaseName();
+        ecl_sum_type * ecl_sum = ecl_sum_fread_alloc_case( base_name.c_str(), ":");
+
+        // Should only get at report steps
+        for (int report_step = 2; report_step < ecl_sum_get_last_report_step(ecl_sum); report_step++) {
+            double wwpr_sum = 0;
+            {
+                int prev_tstep = ecl_sum_iget_report_end(ecl_sum, report_step - 1);
+                for (const auto& well : {"P1", "P2", "P3", "P4"}) {
+                    std::string wwpr_key  = std::string("WWPR:") + well;
+                    wwpr_sum += ecl_sum_get_general_var(ecl_sum, prev_tstep, wwpr_key.c_str());
+                }
+            }
+            BOOST_CHECK_CLOSE( 0.90 * wwpr_sum, ecl_sum_get_general_var(ecl_sum, ecl_sum_iget_report_end(ecl_sum, report_step), "WWIR:INJ"), 1e-3);
+        }
+
+        ecl_sum_free( ecl_sum );
     }
 }

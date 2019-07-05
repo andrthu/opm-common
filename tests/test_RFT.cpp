@@ -30,7 +30,6 @@
 #include <opm/parser/eclipse/Deck/Deck.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
 #include <opm/parser/eclipse/EclipseState/SummaryConfig/SummaryConfig.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
 #include <opm/parser/eclipse/EclipseState/Grid/EclipseGrid.hpp>
 #include <opm/parser/eclipse/EclipseState/IOConfig/IOConfig.hpp>
 
@@ -122,6 +121,7 @@ BOOST_AUTO_TEST_CASE(test_RFT) {
         EclipseIO eclipseWriter( eclipseState, grid, schedule, summary_config );
         time_t start_time = schedule.posixStartTime();
         time_t step_time = ecl_util_make_date(10, 10, 2008 );
+        SummaryState st;
 
         data::Rates r1, r2;
         r1.set( data::Rates::opt::wat, 4.11 );
@@ -154,13 +154,11 @@ BOOST_AUTO_TEST_CASE(test_RFT) {
 
         RestartValue restart_value(solution, wells);
 
-        eclipseWriter.writeTimeStep( 2,
+        eclipseWriter.writeTimeStep( st,
+                                     2,
                                      false,
                                      step_time - start_time,
-                                     restart_value,
-                                     {},
-                                     {},
-                                     {});
+                                     restart_value);
     }
 
     verifyRFTFile("TESTRFT.RFT");
@@ -210,6 +208,7 @@ BOOST_AUTO_TEST_CASE(test_RFT2) {
 
         Schedule schedule(deck, eclipseState);
         SummaryConfig summary_config( deck, schedule, eclipseState.getTableManager( ));
+        SummaryState st;
         time_t start_time = schedule.posixStartTime();
         const auto& time_map = schedule.getTimeMap( );
 
@@ -247,13 +246,11 @@ BOOST_AUTO_TEST_CASE(test_RFT2) {
                 wells["OP_2"] = { r2, 1.0, 1.1, 3.2, 1, well2_comps, SegRes{} };
 
                 RestartValue restart_value(solution, wells);
-                eclipseWriter.writeTimeStep( step,
+                eclipseWriter.writeTimeStep( st,
+                                             step,
                                              false,
                                              step_time - start_time,
-                                             restart_value,
-                                             {},
-                                             {},
-                                             {});
+                                             restart_value);
             }
             verifyRFTFile2("TESTRFT.RFT");
         }

@@ -34,6 +34,7 @@ set( keywords
      000_Eclipse100/B/BLACKOIL
      000_Eclipse100/B/BLOCK_PROBE
      000_Eclipse100/B/BOX
+     000_Eclipse100/B/BRANPROP
      000_Eclipse100/C/CARFIN
      000_Eclipse100/C/CECON
      000_Eclipse100/C/COMPDAT
@@ -103,14 +104,23 @@ set( keywords
      000_Eclipse100/F/FIPOWG
      000_Eclipse100/F/FIP_PROBE
      000_Eclipse100/F/FLUXNUM
+     000_Eclipse100/F/FLUXTYPE
      000_Eclipse100/F/FMTIN
      000_Eclipse100/F/FMTOUT
      000_Eclipse100/F/FMWSET
+     000_Eclipse100/F/FOAM
+     000_Eclipse100/F/FOAMADS
+     000_Eclipse100/F/FOAMFSC
+     000_Eclipse100/F/FOAMMOB
+     000_Eclipse100/F/FOAMOPTS
+     000_Eclipse100/F/FOAMROCK
      000_Eclipse100/F/FRICTION
      000_Eclipse100/F/FULLIMP
      000_Eclipse100/G/GAS
      000_Eclipse100/G/GCONINJE
      000_Eclipse100/G/GCONPROD
+     000_Eclipse100/G/GCONSALE
+     000_Eclipse100/G/GCONSUMP
      000_Eclipse100/G/GDFILE
      000_Eclipse100/G/GDORIENT
      000_Eclipse100/G/GECON
@@ -118,6 +128,7 @@ set( keywords
      000_Eclipse100/G/GLIFTOPT
      000_Eclipse100/G/GMWSET
      000_Eclipse100/G/GNETINJE
+     000_Eclipse100/G/GPMAINT
      000_Eclipse100/G/GRAVITY
      000_Eclipse100/G/GRID
      000_Eclipse100/G/GRIDFILE
@@ -127,6 +138,7 @@ set( keywords
      000_Eclipse100/G/GRUPNET
      000_Eclipse100/G/GRUPTREE
      000_Eclipse100/G/GSATPROD
+     000_Eclipse100/G/GUIDERAT
      000_Eclipse100/I/IMBNUM
      000_Eclipse100/I/IMKRVD
      000_Eclipse100/I/IMPES
@@ -181,6 +193,7 @@ set( keywords
      000_Eclipse100/N/NEXTSTEP
      000_Eclipse100/N/NNC
      000_Eclipse100/N/NOCASC
+     000_Eclipse100/N/NODEPROP
      000_Eclipse100/N/NOECHO
      000_Eclipse100/N/NOGGF
      000_Eclipse100/N/NOINSPEC
@@ -388,6 +401,7 @@ set( keywords
      000_Eclipse100/W/WEFAC
      000_Eclipse100/W/WELLDIMS
      000_Eclipse100/W/WELL_PROBE
+     000_Eclipse100/W/WELL_COMPLETION_PROBE
      000_Eclipse100/W/WELOPEN
      000_Eclipse100/W/WELPI
      000_Eclipse100/W/WELSEGS
@@ -395,6 +409,7 @@ set( keywords
      000_Eclipse100/W/WELSPECL
      000_Eclipse100/W/WELSPECS
      000_Eclipse100/W/WELTARG
+     000_Eclipse100/W/WFOAM
      000_Eclipse100/W/WGASPROD
      000_Eclipse100/W/WGRUPCON
      000_Eclipse100/W/WHISTCTL

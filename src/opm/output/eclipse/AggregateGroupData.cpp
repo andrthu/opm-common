@@ -26,7 +26,6 @@
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/ScheduleEnums.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/GroupTree.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -53,9 +52,9 @@ namespace {
         return inteHead[19];
     }
 
-    const int groupType(const Opm::Schedule& sched,
+    int groupType(const Opm::Schedule& sched,
 		      const Opm::Group& group,
-		      const std::size_t simStep)
+                      const std::size_t simStep)
     {
 	const std::string& groupName = group.name();
 	if (!sched.hasGroup(groupName))
@@ -98,7 +97,7 @@ namespace {
 	for (const auto* group : groups) {
 	    int ind = (group->name() == "FIELD")
 	    ? ngmaxz(inteHead)-1 : group->seqIndex()-1;
-	    const std::pair<size_t, const Opm::Group*> groupPair = std::make_pair(static_cast<size_t>(ind), group); 
+	    const std::pair<size_t, const Opm::Group*> groupPair = std::make_pair(static_cast<size_t>(ind), group);
 	    indexGroupMap.insert(groupPair);
 	}
 	return indexGroupMap;
@@ -112,13 +111,13 @@ namespace {
 	for (const auto* group : groups) {
 	    int ind = (group->name() == "FIELD")
                     ? ngmaxz(inteHead)-1 : group->seqIndex()-1;
-	    std::pair<const std::string, size_t> groupPair = std::make_pair(group->name(), ind); 
+	    std::pair<const std::string, size_t> groupPair = std::make_pair(group->name(), ind);
 	    groupIndexMap.insert(groupPair);
 	}
 	return groupIndexMap;
     }
 
-    const int currentGroupLevel(const Opm::Schedule& sched, const Opm::Group& group, const size_t simStep)
+    int currentGroupLevel(const Opm::Schedule& sched, const Opm::Group& group, const size_t simStep)
     {
 	int level = 0;
 	const std::vector< const Opm::Group* >  groups = sched.getGroups(simStep);
@@ -174,72 +173,72 @@ namespace {
 			   IGrpArray&              iGrp,
 			   const std::vector<int>& inteHead)
         {
-	  // find the number of wells or child groups belonging to a group and store in 
-	  // location nwgmax +1 in the iGrp array
+            // find the number of wells or child groups belonging to a group and store in
+            // location nwgmax +1 in the iGrp array
 
-	    const auto childGroups = sched.getChildGroups(group.name(), simStep);
-	    const auto childWells  = sched.getChildWells(group.name(), simStep);
-	    const auto groupMapNameIndex =  currentGroupMapNameIndex(sched, simStep, inteHead);
-	    const auto mapIndexGroup = currentGroupMapIndexGroup(sched, simStep, inteHead);
-	    if ((childGroups.size() != 0) && (childWells.size()!=0))
-	      throw std::invalid_argument("group has both wells and child groups" + group.name());
+            const auto childGroups = sched.getChildGroups(group.name(), simStep);
+            const auto childWells  = sched.getChildWells2(group.name(), simStep, Opm::GroupWellQueryMode::Immediate);
+            const auto groupMapNameIndex =  currentGroupMapNameIndex(sched, simStep, inteHead);
+            const auto mapIndexGroup = currentGroupMapIndexGroup(sched, simStep, inteHead);
+            if ((childGroups.size() != 0) && (childWells.size()!=0))
+                throw std::invalid_argument("group has both wells and child groups" + group.name());
             int igrpCount = 0;
-	    if (childWells.size() != 0) {
-		//group has child wells 
-		//store the well number (sequence index) in iGrp according to the sequence they are defined
-		for ( auto it = childWells.begin() ; it != childWells.end(); it++) {
-		    iGrp[igrpCount] = (*it)->seqIndex()+1;
-		    igrpCount+=1;
-		}
-	    }
-	    else if (childGroups.size() != 0) {
-		//group has child groups
-		//The field group always has seqIndex = 0 because it is always defined first
-	        //Hence the all groups except the Field group uses the seqIndex assigned
-		//iGrp contains the child groups in ascending group sequence index
-		std::vector<size_t> childGroupIndex;
-		Opm::RestartIO::Helpers::groupMaps groupMap;
-		groupMap.currentGrpTreeNameSeqIndMap(sched, simStep, groupMapNameIndex,mapIndexGroup);
-		const auto indGroupMap = groupMap.indexGroupMap();
-		const auto gNameIndMap = groupMap.groupNameIndexMap();
-		for (auto* grp : childGroups) {
-		  auto groupName = grp->name();
-		  auto searchGTName = gNameIndMap.find(groupName);
-		  if (searchGTName != gNameIndMap.end()) {
-		      childGroupIndex.push_back(searchGTName->second);
-		  }
-		  else {
-		      throw std::invalid_argument( "Invalid group name" );
-		  }
-		}
-		std::sort(childGroupIndex.begin(), childGroupIndex.end());
-		for (auto groupTreeIndex : childGroupIndex) {
-		    auto searchGTIterator = indGroupMap.find(groupTreeIndex);
-		    if (searchGTIterator != indGroupMap.end()) {
-			auto gname = (searchGTIterator->second)->name();
-			auto gSeqNoItr = groupMapNameIndex.find(gname);
-			if (gSeqNoItr != groupMapNameIndex.end()) {
-			    iGrp[igrpCount] = (gSeqNoItr->second) + 1;
-			    igrpCount+=1;
-			}
-			else {
-			    std::cout << "AggregateGroupData, ChildGroups - Group name: groupMapNameIndex: " << gSeqNoItr->first << std::endl;
-			    throw std::invalid_argument( "Invalid group name" );
-			}
-		    }
-		    else {
-			std::cout << "AggregateGroupData, ChildGroups - GroupTreeIndex: " << groupTreeIndex << std::endl;
-			throw std::invalid_argument( "Invalid GroupTree index" );
-		    }
-		}
-	    }
+            if (childWells.size() != 0) {
+                //group has child wells
+                //store the well number (sequence index) in iGrp according to the sequence they are defined
+                for ( const auto& well : childWells) {
+                    iGrp[igrpCount] = well.seqIndex()+1;
+                    igrpCount+=1;
+                }
+            }
+            else if (childGroups.size() != 0) {
+                //group has child groups
+                //The field group always has seqIndex = 0 because it is always defined first
+                //Hence the all groups except the Field group uses the seqIndex assigned
+                //iGrp contains the child groups in ascending group sequence index
+                std::vector<size_t> childGroupIndex;
+                Opm::RestartIO::Helpers::groupMaps groupMap;
+                groupMap.currentGrpTreeNameSeqIndMap(sched, simStep, groupMapNameIndex,mapIndexGroup);
+                const auto indGroupMap = groupMap.indexGroupMap();
+                const auto gNameIndMap = groupMap.groupNameIndexMap();
+                for (auto* grp : childGroups) {
+                    auto groupName = grp->name();
+                    auto searchGTName = gNameIndMap.find(groupName);
+                    if (searchGTName != gNameIndMap.end()) {
+                        childGroupIndex.push_back(searchGTName->second);
+                    }
+                    else {
+                        throw std::invalid_argument( "Invalid group name" );
+                    }
+                }
+                std::sort(childGroupIndex.begin(), childGroupIndex.end());
+                for (auto groupTreeIndex : childGroupIndex) {
+                    auto searchGTIterator = indGroupMap.find(groupTreeIndex);
+                    if (searchGTIterator != indGroupMap.end()) {
+                        auto gname = (searchGTIterator->second)->name();
+                        auto gSeqNoItr = groupMapNameIndex.find(gname);
+                        if (gSeqNoItr != groupMapNameIndex.end()) {
+                            iGrp[igrpCount] = (gSeqNoItr->second) + 1;
+                            igrpCount+=1;
+                        }
+                        else {
+                            std::cout << "AggregateGroupData, ChildGroups - Group name: groupMapNameIndex: " << gSeqNoItr->first << std::endl;
+                            throw std::invalid_argument( "Invalid group name" );
+                        }
+                    }
+                    else {
+                        std::cout << "AggregateGroupData, ChildGroups - GroupTreeIndex: " << groupTreeIndex << std::endl;
+                        throw std::invalid_argument( "Invalid GroupTree index" );
+                    }
+                }
+            }
 
 	    //assign the number of child wells or child groups to
 	    // location nwgmax
 	    iGrp[nwgmax] =  (childGroups.size() == 0)
                     ? childWells.size() : childGroups.size();
 
-	    // find the group type (well group (type 0) or node group (type 1) and store the type in  
+	    // find the group type (well group (type 0) or node group (type 1) and store the type in
 	    // location nwgmax + 26
 	    const auto grpType = groupType(sched, group, simStep);
 	    iGrp[nwgmax+26] = grpType;
@@ -248,7 +247,7 @@ namespace {
 	    //location nwgmax + 27
 	    const auto grpLevel = currentGroupLevel(sched, group, simStep);
 	    iGrp[nwgmax+27] = grpLevel;
-	    
+
 	    // set values for group probably connected to GCONPROD settings
 	    //
 	    if (group.name() != "FIELD")
@@ -369,31 +368,6 @@ namespace {
             };
         }
 
-        std::vector<std::string>
-        filter_cumulative(const bool     ecl_compatible_rst,
-                          const std::vector<std::string>& keys)
-        {
-            if (ecl_compatible_rst) {
-                // User wants ECLIPSE-compatible output.  Write all vectors.
-                return keys;
-            }
-
-            auto ret = std::vector<std::string>{};
-            ret.reserve(keys.size());
-
-            for (const auto& key : keys) {
-                if ((key[3] == 'T') && ((key[2] == 'I') || (key[2] == 'P'))) {
-                    // Don't write cumulative quantities in case of OPM
-                    // extended restart files.
-                    continue;
-                }
-
-                ret.push_back(key);
-            }
-
-            return ret;
-        }
-
         // here define the dynamic group quantities to be written to the restart file
         template <class XGrpArray>
         void dynamicContrib(const std::vector<std::string>&      restart_group_keys,
@@ -402,7 +376,6 @@ namespace {
 			    const std::map<std::string, size_t>& fieldKeyToIndex,
 			    const Opm::Group&                    group,
 			    const Opm::SummaryState&             sumState,
-			    const bool                           ecl_compatible_rst,
 			    XGrpArray&                           xGrp)
         {
 	  std::string groupName = group.name();
@@ -411,7 +384,7 @@ namespace {
 	  const std::map<std::string, size_t>& keyToIndex = (groupName == "FIELD")
 	  ? fieldKeyToIndex : groupKeyToIndex;
 
-	  for (const auto key : filter_cumulative(ecl_compatible_rst,keys)) {
+	  for (const auto& key : keys) {
 	      std::string compKey = (groupName == "FIELD")
 	      ? key : key + ":" + groupName;
 
@@ -437,12 +410,12 @@ namespace {
         }
 
         Opm::RestartIO::Helpers::WindowedArray<
-            Opm::RestartIO::Helpers::CharArrayNullTerm<8>
+            Opm::EclIO::PaddedOutputString<8>
         >
         allocate(const std::vector<int>& inteHead)
         {
             using WV = Opm::RestartIO::Helpers::WindowedArray<
-                Opm::RestartIO::Helpers::CharArrayNullTerm<8>
+                Opm::EclIO::PaddedOutputString<8>
             >;
 
             return WV {
@@ -462,8 +435,8 @@ namespace {
 void
 Opm::RestartIO::Helpers::groupMaps::
 currentGrpTreeNameSeqIndMap(const Opm::Schedule&                        sched,
-                            const size_t                                simStep,
-                            const std::map<const std::string , size_t>& GnIMap,
+                            const size_t                                      simStep,
+                            const std::map<const std::string , size_t>& /* GnIMap */,
                             const std::map<size_t, const Opm::Group*>&  IGMap)
     {
 	const auto& grpTreeNSIMap = (sched.getGroupTree(simStep)).nameSeqIndMap();
@@ -513,11 +486,6 @@ AggregateGroupData(const std::vector<int>& inteHead)
 void
 Opm::RestartIO::Helpers::AggregateGroupData::
 captureDeclaredGroupData(const Opm::Schedule&                 sched,
-			 const std::vector<std::string>&      restart_group_keys,
-			 const std::vector<std::string>&      restart_field_keys,
-			 const std::map<std::string, size_t>& groupKeyToIndex,
-			 const std::map<std::string, size_t>& fieldKeyToIndex,
-			 const bool                           ecl_compatible_rst,
 			 const std::size_t                    simStep,
 			 const Opm::SummaryState&             sumState,
 			 const std::vector<int>&              inteHead)
@@ -545,23 +513,21 @@ captureDeclaredGroupData(const Opm::Schedule&                 sched,
 
     // Define Static Contributions to SGrp Array.
     groupLoop(curGroups,
-        [this](const Group& group, const std::size_t groupID) -> void
+              [this](const Group& /* group */, const std::size_t groupID) -> void
     {
         auto sw = this->sGroup_[groupID];
         SGrp::staticContrib(sw);
     });
 
     // Define Dynamic Contributions to XGrp Array.
-    groupLoop(curGroups, [&restart_group_keys, &restart_field_keys,
-                          &groupKeyToIndex, &fieldKeyToIndex,
-                          ecl_compatible_rst, &sumState, this]
+    groupLoop(curGroups, [&sumState, this]
 	(const Group& group, const std::size_t groupID) -> void
     {
         auto xg = this->xGroup_[groupID];
 
-        XGrp::dynamicContrib(restart_group_keys, restart_field_keys,
-                             groupKeyToIndex, fieldKeyToIndex, group,
-                             sumState, ecl_compatible_rst, xg);
+        XGrp::dynamicContrib(this->restart_group_keys, this->restart_field_keys,
+                             this->groupKeyToIndex, this->fieldKeyToIndex, group,
+                             sumState, xg);
     });
 
     // Define Static Contributions to ZGrp Array.

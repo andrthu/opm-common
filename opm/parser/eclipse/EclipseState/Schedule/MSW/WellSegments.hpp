@@ -34,14 +34,12 @@ namespace Opm {
     public:
         WellSegments() = default;
 
-        std::string wellName() const;
-        int numberBranch() const;
+        const std::string& wellName() const;
         int size() const;
         double depthTopSegment() const;
         double lengthTopSegment() const;
         double volumeTopSegment() const;
 
-        WellSegment::LengthDepthEnum lengthDepthType() const;
         WellSegment::CompPressureDropEnum compPressureDrop() const;
         WellSegment::MultiPhaseModelEnum multiPhaseModel() const;
 
@@ -56,18 +54,17 @@ namespace Opm {
 
         const Segment& operator[](size_t idx) const;
         void orderSegments();
-        void processABS();
-        void processINC(const bool first_time);
+        void process(bool first_time);
 
         bool operator==( const WellSegments& ) const;
         bool operator!=( const WellSegments& ) const;
 
     private:
+        void processABS();
+        void processINC(const bool first_time);
 
         // name of the well
         std::string m_well_name;
-        // number of the branches
-        int m_number_branch;
         // depth of the nodal point of the top segment
         // it is taken as the BHP reference depth of the well
         // BHP reference depth data from elsewhere will be ignored for multi-segmented wells
@@ -93,6 +90,7 @@ namespace Opm {
         // storage index in the vector
         std::map<int, int> segment_number_to_index;
     };
+    std::ostream& operator<<( std::ostream&, const WellSegments& );
 }
 
 #endif

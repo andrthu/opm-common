@@ -35,13 +35,10 @@
 
 namespace Opm {
 
-    std::string WellSegments::wellName() const {
+    const std::string& WellSegments::wellName() const {
         return m_well_name;
     }
 
-    int WellSegments::numberBranch() const {
-        return m_number_branch;
-    }
 
   int WellSegments::size() const {
         return m_segments.size();
@@ -59,9 +56,6 @@ namespace Opm {
         return m_volume_top;
     }
 
-    WellSegment::LengthDepthEnum WellSegments::lengthDepthType() const {
-        return m_length_depth_type;
-    }
 
     WellSegment::CompPressureDropEnum WellSegments::compPressureDrop() const {
         return m_comp_pressure_drop;
@@ -227,6 +221,16 @@ namespace Opm {
         }
         return m_segments[segment_index];
     }
+
+    void WellSegments::process(bool first_time) {
+        if (this->m_length_depth_type == WellSegment::ABS)
+            this->processABS();
+        else if (this->m_length_depth_type == WellSegment::INC)
+            this->processINC(first_time);
+        else
+            throw std::logic_error("Invalid llength/depth/type in segment data structure");
+    }
+
 
     void WellSegments::processABS() {
         const double invalid_value = Segment::invalidValue(); // meaningless value to indicate unspecified/uncompleted values
@@ -397,10 +401,9 @@ namespace Opm {
 
     bool WellSegments::operator==( const WellSegments& rhs ) const {
         return this->m_well_name == rhs.m_well_name
-            && this->m_number_branch == rhs.m_number_branch
             && this->m_depth_top == rhs.m_depth_top
             && this->m_length_top == rhs.m_length_top
-            && this->m_volume_top == rhs.m_length_top
+            && this->m_volume_top == rhs.m_volume_top
             && this->m_length_depth_type == rhs.m_length_depth_type
             && this->m_comp_pressure_drop == rhs.m_comp_pressure_drop
             && this->m_multiphase_model == rhs.m_multiphase_model
@@ -417,4 +420,13 @@ namespace Opm {
     bool WellSegments::operator!=( const WellSegments& rhs ) const {
         return !( *this == rhs );
     }
+
+    std::ostream& operator<<( std::ostream& stream, const WellSegments& well_segments) {
+        return stream
+            << well_segments.wellName() << " { top: {" <<
+            " L: " << well_segments.lengthTopSegment() <<
+            " D: " << well_segments.depthTopSegment() <<
+            " V: " << well_segments.volumeTopSegment() << " }}";
+    }
+
 }

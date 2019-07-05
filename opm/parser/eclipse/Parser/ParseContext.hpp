@@ -254,6 +254,7 @@ namespace Opm {
         const static std::string UNSUPPORTED_TERMINATE_IF_BHP;
 
         const static std::string UDQ_PARSE_ERROR;
+        const static std::string UDQ_TYPE_ERROR;
 
         /*
           If the third item in the THPRES keyword is defaulted the
@@ -331,6 +332,10 @@ namespace Opm {
 
         const static std::string RPT_UNKNOWN_MNEMONIC;
 
+        const static std::string SCHEDULE_WELL_ERROR;
+
+        const static std::string SCHEDULE_COMPSEGS_INVALID;
+        const static std::string SCHEDULE_COMPSEGS_NOT_SUPPORTED;
 
         /*
           The SIMULATOR_KEYWORD_ errormodes are for the situation where the

@@ -24,22 +24,24 @@
 #include <opm/parser/eclipse/Units/UnitSystem.hpp>
 #include <opm/parser/eclipse/Deck/DeckRecord.hpp>
 #include <opm/parser/eclipse/Parser/ParserKeywords/S.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well/WellInjectionProperties.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/SummaryState.hpp>
 
-#include "../injection.hpp"
+
+#include "WellInjectionProperties.hpp"
+#include "injection.hpp"
+#include "well_uda.hpp"
 
 namespace Opm {
 
-    WellInjectionProperties::WellInjectionProperties()
-      : injectorType(WellInjector::WATER),
-        controlMode(WellInjector::CMODE_UNDEFINED) {
-        surfaceInjectionRate=0.0;
-        reservoirInjectionRate=0.0;
+
+    WellInjectionProperties::WellInjectionProperties(const std::string& wname)
+        : name(wname),
+          injectorType(WellInjector::WATER),
+          controlMode(WellInjector::CMODE_UNDEFINED)
+    {
         temperature=
             Metric::TemperatureOffset
             + ParserKeywords::STCOND::TEMPERATURE::defaultValue;
-        BHPLimit=0.0;
-        THPLimit=0.0;
         BHPH=0.0;
         THPH=0.0;
         VFPTableNumber=0;
@@ -48,27 +50,26 @@ namespace Opm {
     }
 
 
-    void WellInjectionProperties::handleWCONINJE(const DeckRecord& record, bool availableForGroupControl, const std::string& well_name, const UnitSystem& unit_system) {
-        WellInjector::TypeEnum injectorType = WellInjector::TypeFromString( record.getItem("TYPE").getTrimmedString(0) );
-        this->injectorType = injectorType;
+    void WellInjectionProperties::handleWCONINJE(const DeckRecord& record, bool availableForGroupControl, const std::string& well_name) {
+        this->injectorType = WellInjector::TypeFromString( record.getItem("TYPE").getTrimmedString(0) );
         this->predictionMode = true;
 
         if (!record.getItem("RATE").defaultApplied(0)) {
-            this->surfaceInjectionRate = injection::rateToSI(record.getItem("RATE").get< double >(0) , injectorType, unit_system);
+            this->surfaceInjectionRate = record.getItem("RATE").get<UDAValue>(0);
             this->addInjectionControl(WellInjector::RATE);
         } else
             this->dropInjectionControl(WellInjector::RATE);
 
 
         if (!record.getItem("RESV").defaultApplied(0)) {
-            this->reservoirInjectionRate = record.getItem("RESV").getSIDouble(0);
+            this->reservoirInjectionRate = record.getItem("RESV").get<UDAValue>(0);
             this->addInjectionControl(WellInjector::RESV);
         } else
             this->dropInjectionControl(WellInjector::RESV);
 
 
         if (!record.getItem("THP").defaultApplied(0)) {
-            this->THPLimit       = record.getItem("THP").getSIDouble(0);
+            this->THPLimit       = record.getItem("THP").get<UDAValue>(0);
             this->addInjectionControl(WellInjector::THP);
         } else
             this->dropInjectionControl(WellInjector::THP);
@@ -82,7 +83,7 @@ namespace Opm {
           current behavoir agrees with the behovir of Eclipse when BHPLimit is not
           specified while employed during group control.
         */
-        this->setBHPLimit(record.getItem("BHP").getSIDouble(0));
+        this->setBHPLimit(record.getItem("BHP").get<UDAValue>(0).get<double>());
         // BHP control should always be there.
         this->addInjectionControl(WellInjector::BHP);
 
@@ -92,9 +93,9 @@ namespace Opm {
             this->dropInjectionControl(WellInjector::GRUP);
         {
             const std::string& cmodeString = record.getItem("CMODE").getTrimmedString(0);
-            WellInjector::ControlModeEnum controlMode = WellInjector::ControlModeFromString( cmodeString );
-            if (this->hasInjectionControl( controlMode))
-                this->controlMode = controlMode;
+            WellInjector::ControlModeEnum controlModeArg = WellInjector::ControlModeFromString( cmodeString );
+            if (this->hasInjectionControl( controlModeArg))
+                this->controlMode = controlModeArg;
             else {
                 throw std::invalid_argument("Tried to set invalid control: " + cmodeString + " for well: " + well_name);
             }
@@ -102,37 +103,74 @@ namespace Opm {
     }
 
 
-    void WellInjectionProperties::handleWCONINJH(const DeckRecord& record, bool is_producer, const std::string& well_name, const UnitSystem& unit_system) {
+
+    void WellInjectionProperties::handleWELTARG(WellTarget::ControlModeEnum cmode, double newValue, double siFactorG, double siFactorL, double siFactorP) {
+        if (cmode == WellTarget::BHP){
+            this->BHPLimit.reset( newValue * siFactorP );
+        }
+        else if (cmode == WellTarget::ORAT){
+            if(this->injectorType == WellInjector::TypeEnum::OIL){
+                this->surfaceInjectionRate.reset( newValue * siFactorL );
+            }else{
+                std::invalid_argument("Well type must be OIL to set the oil rate");
+            }
+        }
+        else if (cmode == WellTarget::WRAT){
+            if(this->injectorType == WellInjector::TypeEnum::WATER)
+                this->surfaceInjectionRate.reset( newValue * siFactorL );
+            else
+                std::invalid_argument("Well type must be WATER to set the water rate");
+        }
+        else if (cmode == WellTarget::GRAT){
+            if(this->injectorType == WellInjector::TypeEnum::GAS){
+                this->surfaceInjectionRate.reset( newValue * siFactorG );
+            }else{
+                std::invalid_argument("Well type must be GAS to set the gas rate");
+            }
+        }
+        else if (cmode == WellTarget::THP){
+            this->THPLimit.reset( newValue * siFactorP );
+        }
+        else if (cmode == WellTarget::VFP){
+            this->VFPTableNumber = static_cast<int> (newValue);
+        }
+        else if (cmode == WellTarget::RESV){
+            this->reservoirInjectionRate.reset( newValue * siFactorL );
+        }
+        else if (cmode != WellTarget::GUID){
+            throw std::invalid_argument("Invalid keyword (MODE) supplied");
+        }
+    }
+
+
+    void WellInjectionProperties::handleWCONINJH(const DeckRecord& record, bool is_producer, const std::string& well_name) {
         // convert injection rates to SI
         const auto& typeItem = record.getItem("TYPE");
         if (typeItem.defaultApplied(0)) {
             const std::string msg = "Injection type can not be defaulted for keyword WCONINJH";
             throw std::invalid_argument(msg);
         }
-        const WellInjector::TypeEnum injectorType = WellInjector::TypeFromString( typeItem.getTrimmedString(0));
-        double injectionRate = record.getItem("RATE").get< double >(0);
-        injectionRate = injection::rateToSI(injectionRate, injectorType, unit_system);
+        this->injectorType = WellInjector::TypeFromString( typeItem.getTrimmedString(0));
 
-        this->injectorType = injectorType;
-
-
-        if (!record.getItem("RATE").defaultApplied(0))
-            this->surfaceInjectionRate = injectionRate;
+        if (!record.getItem("RATE").defaultApplied(0)) {
+            double injectionRate = record.getItem("RATE").get<double>(0);
+            this->surfaceInjectionRate.reset( injectionRate );
+        }
         if ( record.getItem( "BHP" ).hasValue(0) )
             this->BHPH = record.getItem("BHP").getSIDouble(0);
         if ( record.getItem( "THP" ).hasValue(0) )
             this->THPH = record.getItem("THP").getSIDouble(0);
 
         const std::string& cmodeString = record.getItem("CMODE").getTrimmedString(0);
-        const WellInjector::ControlModeEnum controlMode = WellInjector::ControlModeFromString( cmodeString );
+        const WellInjector::ControlModeEnum newControlMode = WellInjector::ControlModeFromString( cmodeString );
 
-        if ( !(controlMode == WellInjector::RATE || controlMode == WellInjector::BHP) ) {
+        if ( !(newControlMode == WellInjector::RATE || newControlMode == WellInjector::BHP) ) {
             const std::string msg = "Only RATE and BHP control are allowed for WCONINJH for well " + well_name;
             throw std::invalid_argument(msg);
         }
 
         // when well is under BHP control, we use its historical BHP value as BHP limit
-        if (controlMode == WellInjector::BHP) {
+        if (newControlMode == WellInjector::BHP) {
             this->setBHPLimit(this->BHPH);
         } else {
             const bool switching_from_producer = is_producer;
@@ -147,13 +185,13 @@ namespace Opm {
         }
 
         this->addInjectionControl(WellInjector::BHP);
-        this->addInjectionControl(controlMode);
-        this->controlMode = controlMode;
+        this->addInjectionControl(newControlMode);
+        this->controlMode = newControlMode;
         this->predictionMode = false;
 
-        const int VFPTableNumber = record.getItem("VFP_TABLE").get< int >(0);
-        if (VFPTableNumber > 0) {
-            this->VFPTableNumber = VFPTableNumber;
+        const int VFPTableNumberArg = record.getItem("VFP_TABLE").get< int >(0);
+        if (VFPTableNumberArg > 0) {
+            this->VFPTableNumber = VFPTableNumberArg;
         }
     }
 
@@ -182,11 +220,11 @@ namespace Opm {
     void WellInjectionProperties::resetDefaultHistoricalBHPLimit() {
         // this default BHP value is from simulation result,
         // without finding any related document
-        BHPLimit = 6891.2 * unit::barsa;
+        BHPLimit.reset( 6891.2 * unit::barsa );
     }
 
     void WellInjectionProperties::setBHPLimit(const double limit) {
-        BHPLimit = limit;
+        BHPLimit.reset( limit );
     }
 
     std::ostream& operator<<( std::ostream& stream,
@@ -207,4 +245,21 @@ namespace Opm {
             << "control mode: "     << wp.controlMode << " }";
     }
 
+
+    InjectionControls WellInjectionProperties::controls(const UnitSystem& unit_system, const SummaryState& st, double udq_default) const {
+        InjectionControls controls(this->injectionControls);
+
+        controls.surface_rate = UDA::eval_well_uda_rate(this->surfaceInjectionRate, this->name, st, udq_default, this->injectorType, unit_system);
+        controls.reservoir_rate = UDA::eval_well_uda(this->reservoirInjectionRate, this->name, st, udq_default);
+        controls.bhp_limit = UDA::eval_well_uda(this->BHPLimit, this->name, st, udq_default);
+        controls.thp_limit = UDA::eval_well_uda(this->THPLimit, this->name, st, udq_default);
+
+        controls.temperature = this->temperature;
+        controls.injector_type = this->injectorType;
+        controls.cmode = this->controlMode;
+        controls.vfp_table_number = this->VFPTableNumber;
+        controls.injector_type = this->injectorType;
+
+        return controls;
+    }
 }

@@ -29,7 +29,6 @@
 #include <opm/parser/eclipse/EclipseState/Schedule/Group.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/GroupTree.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Well/WellConnections.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/ArrayDimChecker.hpp>
 
@@ -43,7 +42,7 @@ namespace {
         {
             const auto nWells = sched.numWells();
 
-            if (nWells > static_cast<decltype(nWells)>(wdims.maxWellsInField()))
+            if (nWells > std::size_t(wdims.maxWellsInField()))
             {
                 std::ostringstream os;
                 os << "Run uses " << nWells << " wells, but allocates at "
@@ -61,8 +60,9 @@ namespace {
                               Opm::ErrorGuard&         guard)
         {
             auto nconn = std::size_t{0};
-            for (const auto* well : sched.getWells()) {
-                nconn = std::max(nconn, well->getConnections().size());
+            for (const auto& well_name : sched.wellNames()) {
+                const auto& well = sched.getWell2atEnd(well_name);
+                nconn = std::max(nconn, well.getConnections().size());
             }
 
             if (nconn > static_cast<decltype(nconn)>(wdims.maxConnPerWell()))
@@ -87,7 +87,7 @@ namespace {
 
             // Note: "1 +" to account for FIELD group being in 'sched.numGroups()'
             //   but excluded from WELLDIMS(3).
-            if (nGroups > 1 + static_cast<decltype(nGroups)>(wdims.maxGroupsInField()))
+            if (nGroups > 1U + wdims.maxGroupsInField())
             {
                 std::ostringstream os;
                 os << "Run uses " << (nGroups - 1) << " non-FIELD groups, but "
@@ -114,7 +114,7 @@ namespace {
                 size = std::max(size, static_cast<std::size_t>(nwgmax));
             }
 
-            if (size >= static_cast<decltype(size)>(wdims.maxWellsPerGroup()))
+            if (size > static_cast<decltype(size)>(wdims.maxWellsPerGroup()))
             {
                 std::ostringstream os;
                 os << "Run uses maximum group size of " << size << ", but "

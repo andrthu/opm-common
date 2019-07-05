@@ -34,11 +34,11 @@
 #include <opm/parser/eclipse/EclipseState/IOConfig/IOConfig.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
 #include <opm/parser/eclipse/EclipseState/SummaryConfig/SummaryConfig.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
 #include <opm/parser/eclipse/Parser/Parser.hpp>
 #include <opm/parser/eclipse/Utility/Functional.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/SummaryState.hpp>
 
+#include <opm/io/eclipse/OutputStream.hpp>
 
 // ERT stuff
 #include <ert/ecl/ecl_kw.h>
@@ -351,123 +351,123 @@ Opm::SummaryState sim_state()
 {
     auto state = Opm::SummaryState{};
 
-    state.add("WOPR:OP_1" ,    1.0);
-    state.add("WWPR:OP_1" ,    2.0);
-    state.add("WGPR:OP_1" ,    3.0);
-    state.add("WVPR:OP_1" ,    4.0);
-    state.add("WOPT:OP_1" ,   10.0);
-    state.add("WWPT:OP_1" ,   20.0);
-    state.add("WGPT:OP_1" ,   30.0);
-    state.add("WVPT:OP_1" ,   40.0);
-    state.add("WWIR:OP_1" ,    0.0);
-    state.add("WGIR:OP_1" ,    0.0);
-    state.add("WWIT:OP_1" ,    0.0);
-    state.add("WGIT:OP_1" ,    0.0);
-    state.add("WWCT:OP_1" ,    0.625);
-    state.add("WGOR:OP_1" ,  234.5);
-    state.add("WBHP:OP_1" ,  314.15);
-    state.add("WOPTH:OP_1",  345.6);
-    state.add("WWPTH:OP_1",  456.7);
-    state.add("WGPTH:OP_1",  567.8);
-    state.add("WWITH:OP_1",    0.0);
-    state.add("WGITH:OP_1",    0.0);
-    state.add("WGVIR:OP_1",    0.0);
-    state.add("WWVIR:OP_1",    0.0);
+    state.update("WOPR:OP_1" ,    1.0);
+    state.update("WWPR:OP_1" ,    2.0);
+    state.update("WGPR:OP_1" ,    3.0);
+    state.update("WVPR:OP_1" ,    4.0);
+    state.update("WOPT:OP_1" ,   10.0);
+    state.update("WWPT:OP_1" ,   20.0);
+    state.update("WGPT:OP_1" ,   30.0);
+    state.update("WVPT:OP_1" ,   40.0);
+    state.update("WWIR:OP_1" ,    0.0);
+    state.update("WGIR:OP_1" ,    0.0);
+    state.update("WWIT:OP_1" ,    0.0);
+    state.update("WGIT:OP_1" ,    0.0);
+    state.update("WWCT:OP_1" ,    0.625);
+    state.update("WGOR:OP_1" ,  234.5);
+    state.update("WBHP:OP_1" ,  314.15);
+    state.update("WOPTH:OP_1",  345.6);
+    state.update("WWPTH:OP_1",  456.7);
+    state.update("WGPTH:OP_1",  567.8);
+    state.update("WWITH:OP_1",    0.0);
+    state.update("WGITH:OP_1",    0.0);
+    state.update("WGVIR:OP_1",    0.0);
+    state.update("WWVIR:OP_1",    0.0);
 
-    state.add("WOPR:OP_2" ,    0.0);
-    state.add("WWPR:OP_2" ,    0.0);
-    state.add("WGPR:OP_2" ,    0.0);
-    state.add("WVPR:OP_2" ,    0.0);
-    state.add("WOPT:OP_2" ,    0.0);
-    state.add("WWPT:OP_2" ,    0.0);
-    state.add("WGPT:OP_2" ,    0.0);
-    state.add("WVPT:OP_2" ,    0.0);
-    state.add("WWIR:OP_2" ,  100.0);
-    state.add("WGIR:OP_2" ,  200.0);
-    state.add("WWIT:OP_2" , 1000.0);
-    state.add("WGIT:OP_2" , 2000.0);
-    state.add("WWCT:OP_2" ,    0.0);
-    state.add("WGOR:OP_2" ,    0.0);
-    state.add("WBHP:OP_2" ,  400.6);
-    state.add("WOPTH:OP_2",    0.0);
-    state.add("WWPTH:OP_2",    0.0);
-    state.add("WGPTH:OP_2",    0.0);
-    state.add("WWITH:OP_2", 1515.0);
-    state.add("WGITH:OP_2", 3030.0);
-    state.add("WGVIR:OP_2", 1234.0);
-    state.add("WWVIR:OP_2", 4321.0);
+    state.update("WOPR:OP_2" ,    0.0);
+    state.update("WWPR:OP_2" ,    0.0);
+    state.update("WGPR:OP_2" ,    0.0);
+    state.update("WVPR:OP_2" ,    0.0);
+    state.update("WOPT:OP_2" ,    0.0);
+    state.update("WWPT:OP_2" ,    0.0);
+    state.update("WGPT:OP_2" ,    0.0);
+    state.update("WVPT:OP_2" ,    0.0);
+    state.update("WWIR:OP_2" ,  100.0);
+    state.update("WGIR:OP_2" ,  200.0);
+    state.update("WWIT:OP_2" , 1000.0);
+    state.update("WGIT:OP_2" , 2000.0);
+    state.update("WWCT:OP_2" ,    0.0);
+    state.update("WGOR:OP_2" ,    0.0);
+    state.update("WBHP:OP_2" ,  400.6);
+    state.update("WOPTH:OP_2",    0.0);
+    state.update("WWPTH:OP_2",    0.0);
+    state.update("WGPTH:OP_2",    0.0);
+    state.update("WWITH:OP_2", 1515.0);
+    state.update("WGITH:OP_2", 3030.0);
+    state.update("WGVIR:OP_2", 1234.0);
+    state.update("WWVIR:OP_2", 4321.0);
 
-    state.add("WOPR:OP_3" ,   11.0);
-    state.add("WWPR:OP_3" ,   12.0);
-    state.add("WGPR:OP_3" ,   13.0);
-    state.add("WVPR:OP_3" ,   14.0);
-    state.add("WOPT:OP_3" ,  110.0);
-    state.add("WWPT:OP_3" ,  120.0);
-    state.add("WGPT:OP_3" ,  130.0);
-    state.add("WVPT:OP_3" ,  140.0);
-    state.add("WWIR:OP_3" ,    0.0);
-    state.add("WGIR:OP_3" ,    0.0);
-    state.add("WWIT:OP_3" ,    0.0);
-    state.add("WGIT:OP_3" ,    0.0);
-    state.add("WWCT:OP_3" ,    0.0625);
-    state.add("WGOR:OP_3" , 1234.5);
-    state.add("WBHP:OP_3" ,  314.15);
-    state.add("WOPTH:OP_3", 2345.6);
-    state.add("WWPTH:OP_3", 3456.7);
-    state.add("WGPTH:OP_3", 4567.8);
-    state.add("WWITH:OP_3",    0.0);
-    state.add("WGITH:OP_3",    0.0);
-    state.add("WGVIR:OP_3",    0.0);
-    state.add("WWVIR:OP_3",   43.21);
+    state.update("WOPR:OP_3" ,   11.0);
+    state.update("WWPR:OP_3" ,   12.0);
+    state.update("WGPR:OP_3" ,   13.0);
+    state.update("WVPR:OP_3" ,   14.0);
+    state.update("WOPT:OP_3" ,  110.0);
+    state.update("WWPT:OP_3" ,  120.0);
+    state.update("WGPT:OP_3" ,  130.0);
+    state.update("WVPT:OP_3" ,  140.0);
+    state.update("WWIR:OP_3" ,    0.0);
+    state.update("WGIR:OP_3" ,    0.0);
+    state.update("WWIT:OP_3" ,    0.0);
+    state.update("WGIT:OP_3" ,    0.0);
+    state.update("WWCT:OP_3" ,    0.0625);
+    state.update("WGOR:OP_3" , 1234.5);
+    state.update("WBHP:OP_3" ,  314.15);
+    state.update("WOPTH:OP_3", 2345.6);
+    state.update("WWPTH:OP_3", 3456.7);
+    state.update("WGPTH:OP_3", 4567.8);
+    state.update("WWITH:OP_3",    0.0);
+    state.update("WGITH:OP_3",    0.0);
+    state.update("WGVIR:OP_3",    0.0);
+    state.update("WWVIR:OP_3",   43.21);
 
-    state.add("GOPR:OP" ,     110.0);
-    state.add("GWPR:OP" ,     120.0);
-    state.add("GGPR:OP" ,     130.0);
-    state.add("GVPR:OP" ,     140.0);
-    state.add("GOPT:OP" ,    1100.0);
-    state.add("GWPT:OP" ,    1200.0);
-    state.add("GGPT:OP" ,    1300.0);
-    state.add("GVPT:OP" ,    1400.0);
-    state.add("GWIR:OP" , -   256.0);
-    state.add("GGIR:OP" , - 65536.0);
-    state.add("GWIT:OP" ,   31415.9);
-    state.add("GGIT:OP" ,   27182.8);
-    state.add("GWCT:OP" ,       0.625);
-    state.add("GGOR:OP" ,    1234.5);
-    state.add("GGVIR:OP",     123.45);
-    state.add("GWVIR:OP",    1234.56);
-    state.add("GOPTH:OP",    5678.90);
-    state.add("GWPTH:OP",    6789.01);
-    state.add("GGPTH:OP",    7890.12);
-    state.add("GWITH:OP",    8901.23);
-    state.add("GGITH:OP",    9012.34);
+    state.update("GOPR:OP" ,     110.0);
+    state.update("GWPR:OP" ,     120.0);
+    state.update("GGPR:OP" ,     130.0);
+    state.update("GVPR:OP" ,     140.0);
+    state.update("GOPT:OP" ,    1100.0);
+    state.update("GWPT:OP" ,    1200.0);
+    state.update("GGPT:OP" ,    1300.0);
+    state.update("GVPT:OP" ,    1400.0);
+    state.update("GWIR:OP" , -   256.0);
+    state.update("GGIR:OP" , - 65536.0);
+    state.update("GWIT:OP" ,   31415.9);
+    state.update("GGIT:OP" ,   27182.8);
+    state.update("GWCT:OP" ,       0.625);
+    state.update("GGOR:OP" ,    1234.5);
+    state.update("GGVIR:OP",     123.45);
+    state.update("GWVIR:OP",    1234.56);
+    state.update("GOPTH:OP",    5678.90);
+    state.update("GWPTH:OP",    6789.01);
+    state.update("GGPTH:OP",    7890.12);
+    state.update("GWITH:OP",    8901.23);
+    state.update("GGITH:OP",    9012.34);
 
-    state.add("FOPR" ,     1100.0);
-    state.add("FWPR" ,     1200.0);
-    state.add("FGPR" ,     1300.0);
-    state.add("FVPR" ,     1400.0);
-    state.add("FOPT" ,    11000.0);
-    state.add("FWPT" ,    12000.0);
-    state.add("FGPT" ,    13000.0);
-    state.add("FVPT" ,    14000.0);
-    state.add("FWIR" , -   2560.0);
-    state.add("FGIR" , - 655360.0);
-    state.add("FWIT" ,   314159.2);
-    state.add("FGIT" ,   271828.1);
-    state.add("FWCT" ,        0.625);
-    state.add("FGOR" ,     1234.5);
-    state.add("FOPTH",    56789.01);
-    state.add("FWPTH",    67890.12);
-    state.add("FGPTH",    78901.23);
-    state.add("FWITH",    89012.34);
-    state.add("FGITH",    90123.45);
-    state.add("FGVIR",     1234.56);
-    state.add("FWVIR",    12345.67);
+    state.update("FOPR" ,     1100.0);
+    state.update("FWPR" ,     1200.0);
+    state.update("FGPR" ,     1300.0);
+    state.update("FVPR" ,     1400.0);
+    state.update("FOPT" ,    11000.0);
+    state.update("FWPT" ,    12000.0);
+    state.update("FGPT" ,    13000.0);
+    state.update("FVPT" ,    14000.0);
+    state.update("FWIR" , -   2560.0);
+    state.update("FGIR" , - 655360.0);
+    state.update("FWIT" ,   314159.2);
+    state.update("FGIT" ,   271828.1);
+    state.update("FWCT" ,        0.625);
+    state.update("FGOR" ,     1234.5);
+    state.update("FOPTH",    56789.01);
+    state.update("FWPTH",    67890.12);
+    state.update("FGPTH",    78901.23);
+    state.update("FWITH",    89012.34);
+    state.update("FGITH",    90123.45);
+    state.update("FGVIR",     1234.56);
+    state.update("FWVIR",    12345.67);
 
     return state;
 }
 
-RestartValue first_sim(const EclipseState& es, EclipseIO& eclWriter, bool write_double) {
+RestartValue first_sim(const EclipseState& es, EclipseIO& eclWriter, SummaryState& st, bool write_double) {
     const auto& grid = es.getInputGrid();
     auto num_cells = grid.getNumActive( );
 
@@ -478,17 +478,18 @@ RestartValue first_sim(const EclipseState& es, EclipseIO& eclWriter, bool write_
     auto wells = mkWells();
     RestartValue restart_value(sol, wells);
 
-    eclWriter.writeTimeStep( 1,
+    eclWriter.writeTimeStep( st,
+                             1,
                              false,
                              first_step - start_time,
                              restart_value,
-			     {}, {}, {}, write_double);
+                             write_double);
 
     return restart_value;
 }
 
-RestartValue second_sim(const EclipseIO& writer, const std::vector<RestartKey>& solution_keys) {
-    return writer.loadRestart( solution_keys );
+RestartValue second_sim(const EclipseIO& writer, SummaryState& summary_state, const std::vector<RestartKey>& solution_keys) {
+    return writer.loadRestart( summary_state, solution_keys );
 }
 
 
@@ -545,17 +546,20 @@ BOOST_AUTO_TEST_CASE(EclipseReadWriteWellStateData) {
 
     Setup setup("FIRST_SIM.DATA");
     EclipseIO eclWriter( setup.es, setup.grid, setup.schedule, setup.summary_config);
-    auto state1 = first_sim( setup.es , eclWriter , false );
-    auto state2 = second_sim( eclWriter , keys );
+    SummaryState st;
+    auto state1 = first_sim( setup.es , eclWriter , st, false );
+    auto state2 = second_sim( eclWriter , st , keys );
     compare(state1, state2 , keys);
 
-    BOOST_CHECK_THROW( second_sim( eclWriter, {{"SOIL", UnitSystem::measure::pressure}} ) , std::runtime_error );
-    BOOST_CHECK_THROW( second_sim( eclWriter, {{"SOIL", UnitSystem::measure::pressure, true}}) , std::runtime_error );
+    BOOST_CHECK_THROW( second_sim( eclWriter, st, {{"SOIL", UnitSystem::measure::pressure}} ) , std::runtime_error );
+    BOOST_CHECK_THROW( second_sim( eclWriter, st, {{"SOIL", UnitSystem::measure::pressure, true}}) , std::runtime_error );
     test_work_area_free( test_area );
 }
 
 
 BOOST_AUTO_TEST_CASE(ECL_FORMATTED) {
+    namespace OS = ::Opm::EclIO::OutputStream;
+
     Setup setup("FIRST_SIM.DATA");
     test_work_area_type * test_area = test_work_area_alloc("test_Restart");
     auto& io_config = setup.es.getIOConfig();
@@ -569,17 +573,33 @@ BOOST_AUTO_TEST_CASE(ECL_FORMATTED) {
 
             io_config.setEclCompatibleRST( false );
             restart_value.addExtra("EXTRA", UnitSystem::measure::pressure, {10,1,2,3});
-            RestartIO::save("OPM_FILE.UNRST", 1 ,
-                            100,
-                            restart_value,
-                            setup.es,
-                            setup.grid,
-                            setup.schedule,
-			    sumState,
-                            true);
+
+            const auto outputDir = std::string {
+                test_work_area_get_cwd(test_area)
+            };
 
             {
-                ecl_file_type * rst_file = ecl_file_open( "OPM_FILE.UNRST" , 0 );
+                const auto seqnum = 1;
+                auto rstFile = OS::Restart {
+                    OS::ResultSet{ outputDir, "OPM_FILE" }, seqnum,
+                    OS::Formatted{ false }, OS::Unified{ true }
+                };
+
+                RestartIO::save(rstFile, seqnum,
+                                100,
+                                restart_value,
+                                setup.es,
+                                setup.grid,
+                                setup.schedule,
+                                sumState,
+                                true);
+            }
+
+            {
+                const auto rstFile = ::Opm::EclIO::OutputStream::
+                    outputFileName({outputDir, "OPM_FILE"}, "UNRST");
+
+                ecl_file_type * rst_file = ecl_file_open( rstFile.c_str() , 0 );
                 ecl_kw_type * swat = ecl_file_iget_named_kw(rst_file, "SWAT", 0);
 
                 BOOST_CHECK_EQUAL( ECL_DOUBLE_TYPE, ecl_kw_get_type(swat));
@@ -588,16 +608,28 @@ BOOST_AUTO_TEST_CASE(ECL_FORMATTED) {
             }
 
             io_config.setEclCompatibleRST( true );
-            RestartIO::save("ECL_FILE.UNRST", 1 ,
-                            100,
-                            restart_value,
-                            setup.es,
-                            setup.grid,
-                            setup.schedule,
-			    sumState,
-                            true);
             {
-                ecl_file_type * rst_file = ecl_file_open( "ECL_FILE.UNRST" , 0 );
+                const auto seqnum = 1;
+                auto rstFile = OS::Restart {
+                    OS::ResultSet{ outputDir, "ECL_FILE" }, seqnum,
+                    OS::Formatted{ false }, OS::Unified{ true }
+                };
+
+                RestartIO::save(rstFile, seqnum,
+                                100,
+                                restart_value,
+                                setup.es,
+                                setup.grid,
+                                setup.schedule,
+                                sumState,
+                                true);
+            }
+
+            {
+                const auto rstFile = ::Opm::EclIO::OutputStream::
+                    outputFileName({outputDir, "ECL_FILE"}, "UNRST");
+
+                ecl_file_type * rst_file = ecl_file_open( rstFile.c_str() , 0 );
                 ecl_kw_type * swat = ecl_file_iget_named_kw(rst_file, "SWAT", 0);
 
                 BOOST_CHECK_EQUAL( ECL_FLOAT_TYPE, ecl_kw_get_type(swat));
@@ -648,31 +680,40 @@ BOOST_AUTO_TEST_CASE(EclipseReadWriteWellStateData_double) {
     test_work_area_copy_file( test_area, "FIRST_SIM.DATA");
     Setup setup("FIRST_SIM.DATA");
     EclipseIO eclWriter( setup.es, setup.grid, setup.schedule, setup.summary_config);
+    SummaryState st;
 
-    auto state1 = first_sim( setup.es , eclWriter , true);
-    auto state2 = second_sim( eclWriter , solution_keys );
+    auto state1 = first_sim( setup.es , eclWriter , st, true);
+    auto state2 = second_sim( eclWriter ,st, solution_keys );
     compare_equal( state1 , state2 , solution_keys);
     test_work_area_free( test_area );
 }
 
 
 BOOST_AUTO_TEST_CASE(WriteWrongSOlutionSize) {
+    namespace OS = ::Opm::EclIO::OutputStream;
+
     Setup setup("FIRST_SIM.DATA");
     test_work_area_type * test_area = test_work_area_alloc("test_Restart");
     {
         auto num_cells = setup.grid.getNumActive( ) + 1;
         auto cells = mkSolution( num_cells );
         auto wells = mkWells();
-	Opm::SummaryState sumState;
+        Opm::SummaryState sumState;
 
-        BOOST_CHECK_THROW( RestartIO::save("FILE.UNRST", 1 ,
+        const auto seqnum = 1;
+        auto rstFile = OS::Restart {
+            OS::ResultSet { test_work_area_get_cwd(test_area), "FILE" }, seqnum,
+            OS::Formatted { false }, OS::Unified { true }
+        };
+
+        BOOST_CHECK_THROW( RestartIO::save(rstFile, seqnum,
                                            100,
                                            RestartValue(cells, wells),
                                            setup.es,
                                            setup.grid ,
                                            setup.schedule,
-					   sumState),
-                                           std::runtime_error);
+                                           sumState),
+                           std::runtime_error);
     }
     test_work_area_free(test_area);
 }
@@ -699,6 +740,8 @@ BOOST_AUTO_TEST_CASE(ExtraData_KEYS) {
 }
 
 BOOST_AUTO_TEST_CASE(ExtraData_content) {
+    namespace OS = ::Opm::EclIO::OutputStream;
+
     Setup setup("FIRST_SIM.DATA");
     test_work_area_type * test_area = test_work_area_alloc("test_Restart");
     {
@@ -708,20 +751,36 @@ BOOST_AUTO_TEST_CASE(ExtraData_content) {
         const auto& units = setup.es.getUnits();
         {
             RestartValue restart_value(cells, wells);
+            SummaryState st;
             const auto sumState = sim_state();
 
             restart_value.addExtra("EXTRA", UnitSystem::measure::pressure, {10,1,2,3});
 
-            RestartIO::save("FILE.UNRST", 1 ,
-                            100,
-                            restart_value,
-                            setup.es,
-                            setup.grid,
-                            setup.schedule,
-                            sumState);
+            const auto outputDir = std::string {
+                test_work_area_get_cwd(test_area)
+            };
 
             {
-                ecl_file_type * f = ecl_file_open( "FILE.UNRST" , 0 );
+                const auto seqnum = 1;
+                auto rstFile = OS::Restart {
+                    OS::ResultSet { outputDir, "FILE" }, seqnum,
+                    OS::Formatted { false }, OS::Unified{ true }
+                };
+
+                RestartIO::save(rstFile, seqnum,
+                                100,
+                                restart_value,
+                                setup.es,
+                                setup.grid,
+                                setup.schedule,
+                                sumState);
+            }
+
+            const auto rstFile = ::Opm::EclIO::OutputStream::
+                outputFileName({outputDir, "FILE"}, "UNRST");
+
+            {
+                ecl_file_type * f = ecl_file_open( rstFile.c_str() , 0 );
                 BOOST_CHECK( ecl_file_has_kw( f , "EXTRA"));
                 {
                     ecl_kw_type * ex = ecl_file_iget_named_kw( f , "EXTRA" , 0 );
@@ -734,20 +793,19 @@ BOOST_AUTO_TEST_CASE(ExtraData_content) {
                 ecl_file_close( f );
             }
 
-            BOOST_CHECK_THROW( RestartIO::load( "FILE.UNRST" , 1 , {}, setup.es, setup.grid , setup.schedule,
+            BOOST_CHECK_THROW( RestartIO::load( rstFile , 1 , st, {}, setup.es, setup.grid , setup.schedule,
                                                 {{"NOT-THIS", UnitSystem::measure::identity, true}}) , std::runtime_error );
             {
-                const auto rst_value = RestartIO::load(
-                    "FILE.UNRST" , 1 ,
-                    /* solution_keys = */ {
-                        RestartKey("SWAT", UnitSystem::measure::identity),
-                        RestartKey("NO"  , UnitSystem::measure::identity, false)
-                    },
-                    setup.es, setup.grid , setup.schedule,
-                    /* extra_keys = */ {
-                        {"EXTRA" , UnitSystem::measure::pressure, true}  ,
-                        {"EXTRA2", UnitSystem::measure::identity, false}
-                    }).first;
+                const auto rst_value = RestartIO::load(rstFile , 1 , st,
+                                                       /* solution_keys = */ {
+                                                                              RestartKey("SWAT", UnitSystem::measure::identity),
+                                                                              RestartKey("NO"  , UnitSystem::measure::identity, false)
+                                                       },
+                                                       setup.es, setup.grid , setup.schedule,
+                                                       /* extra_keys = */ {
+                                                                           {"EXTRA" , UnitSystem::measure::pressure, true}  ,
+                                                                           {"EXTRA2", UnitSystem::measure::identity, false}
+                                                       });
 
                 BOOST_CHECK(!rst_value.hasExtra("EXTRA2"));
                 BOOST_CHECK( rst_value.hasExtra("EXTRA"));
@@ -766,12 +824,17 @@ BOOST_AUTO_TEST_CASE(ExtraData_content) {
 
 
 BOOST_AUTO_TEST_CASE(STORE_THPRES) {
+    namespace OS = ::Opm::EclIO::OutputStream;
+
     Setup setup("FIRST_SIM_THPRES.DATA");
     test_work_area_type * test_area = test_work_area_alloc("test_Restart_THPRES");
     {
         auto num_cells = setup.grid.getNumActive( );
         auto cells = mkSolution( num_cells );
         auto wells = mkWells();
+        const auto outputDir = std::string {
+            test_work_area_get_cwd(test_area)
+        };
         {
             RestartValue restart_value(cells, wells);
             RestartValue restart_value2(cells, wells);
@@ -793,28 +856,48 @@ BOOST_AUTO_TEST_CASE(STORE_THPRES) {
             const auto sumState = sim_state();
 
             /* THPRES data has wrong size in extra container. */
-            BOOST_CHECK_THROW( RestartIO::save("FILE.UNRST", 1 ,
-                                               100,
-                                               restart_value,
-                                               setup.es,
-                                               setup.grid,
-                                               setup.schedule,
-                                               sumState), std::runtime_error);
+            {
+                const auto seqnum = 1;
+                auto rstFile = OS::Restart {
+                    OS::ResultSet { outputDir, "FILE" }, seqnum,
+                    OS::Formatted { false }, OS::Unified { true }
+                };
+
+                BOOST_CHECK_THROW( RestartIO::save(rstFile, seqnum,
+                                                   100,
+                                                   restart_value,
+                                                   setup.es,
+                                                   setup.grid,
+                                                   setup.schedule,
+                                                   sumState),
+                                   std::runtime_error);
+            }
 
             int num_regions = setup.es.getTableManager().getEqldims().getNumEquilRegions();
             std::vector<double>  thpres(num_regions * num_regions, 78);
             restart_value2.addExtra("THRESHPR", UnitSystem::measure::pressure, thpres);
             restart_value2.addExtra("EXTRA", UnitSystem::measure::pressure, thpres);
 
-            RestartIO::save("FILE2.UNRST", 1,
-                            100,
-                            restart_value2,
-                            setup.es,
-                            setup.grid,
-                            setup.schedule, sumState);
+            {
+                const auto seqnum = 1;
+                auto rstFile = OS::Restart {
+                    OS::ResultSet { outputDir, "FILE2" }, seqnum,
+                    OS::Formatted { false }, OS::Unified { true }
+                };
+
+                RestartIO::save(rstFile, seqnum,
+                                100,
+                                restart_value2,
+                                setup.es,
+                                setup.grid,
+                                setup.schedule, sumState);
+            }
 
             {
-                ecl_file_type * rst_file = ecl_file_open("FILE2.UNRST", 0);
+                const auto rstFile = ::Opm::EclIO::OutputStream::
+                    outputFileName({outputDir, "FILE2"}, "UNRST");
+
+                ecl_file_type * rst_file = ecl_file_open(rstFile.c_str(), 0);
                 std::map<std::string,int> kw_pos;
                 for (int i=0; i < ecl_file_get_size(rst_file); i++)
                     kw_pos[ ecl_file_iget_header(rst_file, i ) ] = i;
@@ -840,6 +923,8 @@ BOOST_AUTO_TEST_CASE(Restore_Cumulatives)
 {
     Setup setup("FIRST_SIM.DATA");
 
+    const auto wa = ::ecl::util::TestArea{"test_Restart"};
+
     // Write fully ECLIPSE compatible output.  This also saves cumulatives.
     setup.es.getIOConfig().setEclCompatibleRST(true);
 
@@ -849,17 +934,27 @@ BOOST_AUTO_TEST_CASE(Restore_Cumulatives)
     };
     const auto sumState = sim_state();
 
-    RestartIO::save("FILE.UNRST", 1, 100, restart_value,
-                    setup.es, setup.grid, setup.schedule, sumState);
+    namespace OS = ::Opm::EclIO::OutputStream;
 
-    const auto rst_value = RestartIO::load("FILE.UNRST", 1,
-        /* solution_keys = */ {
-            RestartKey("SWAT", UnitSystem::measure::identity),
-        },
-        setup.es, setup.grid, setup.schedule,
-        /* extra_keys = */ {});
+    const auto rset   = OS::ResultSet{ wa.test_cwd(), "FILE" };
+    const auto seqnum = 1;
+    {
+        auto rstFile = OS::Restart {
+            rset, seqnum, OS::Formatted{ false }, OS::Unified{ true }
+        };
 
-    const auto& rstSumState = rst_value.second;
+        RestartIO::save(rstFile, seqnum, 100, restart_value,
+                        setup.es, setup.grid, setup.schedule, sumState);
+    }
+
+    SummaryState rstSumState;
+    RestartIO::load(OS::outputFileName(rset, "UNRST"), seqnum, rstSumState,
+                    /* solution_keys = */ {
+                                           RestartKey("SWAT", UnitSystem::measure::identity),
+                    },
+                    setup.es, setup.grid, setup.schedule,
+                    /* extra_keys = */ {});
+
 
     // Verify that the restored summary state has all of its requisite
     // cumulative summary vectors.

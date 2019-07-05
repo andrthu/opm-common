@@ -25,7 +25,7 @@
 #include <vector>
 
 #include <opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQEnums.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQWellSet.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQSet.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQContext.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQFunctionTable.hpp>
 
@@ -55,15 +55,12 @@ public:
               T&& errors);
 
 
-    UDQWellSet eval_wells(const UDQContext& context) const;
     UDQSet eval(const UDQContext& context) const;
     const std::string& keyword() const;
-    /*
-      Should not be internalized at all - and will go away; but temporarily needed for testing.
-    */
-    std::vector<std::string> tokens;
+    const std::vector<std::string>& tokens() const;
     UDQVarType  var_type() const;
 private:
+    std::vector<std::string> input_tokens;
     const UDQParams& udq_params;  // Beacuse of the shared RNG stream this must be a reference.
     std::string m_keyword;
     std::shared_ptr<UDQASTNode> ast;

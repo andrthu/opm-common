@@ -24,23 +24,11 @@
 #ifndef RESTART_IO_HPP
 #define RESTART_IO_HPP
 
-#include <opm/parser/eclipse/Units/UnitSystem.hpp>
-#include <opm/parser/eclipse/EclipseState/Runspec.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
-
-#include <opm/output/data/Cells.hpp>
-#include <opm/output/data/Solution.hpp>
-#include <opm/output/data/Wells.hpp>
 #include <opm/output/eclipse/RestartValue.hpp>
 
 #include <opm/parser/eclipse/EclipseState/Schedule/SummaryState.hpp>
 
-#include <ert/ecl/EclKW.hpp>
-#include <ert/ecl/ecl_rsthead.h>
-#include <ert/ecl/ecl_rst_file.h>
-#include <ert/util/util.h>
-
-#include <map>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -48,11 +36,15 @@ namespace Opm {
 
     class EclipseGrid;
     class EclipseState;
-    class Phases;
     class Schedule;
 
 } // namespace Opm
 
+namespace Opm { namespace EclIO { namespace OutputStream {
+
+    class Restart;
+
+}}}
 
 /*
   The two free functions RestartIO::save() and RestartIO::load() can
@@ -77,24 +69,25 @@ namespace Opm {
 */
 namespace Opm { namespace RestartIO {
 
-    void save(const std::string&  filename,
-              int                 report_step,
-              double              seconds_elapsed,
-              RestartValue        value,
-              const EclipseState& es,
-              const EclipseGrid&  grid,
-              const Schedule&     schedule,
-              const SummaryState& sumState,
-              bool                write_double = false);
+    void save(EclIO::OutputStream::Restart& rstFile,
+              int                           report_step,
+              double                        seconds_elapsed,
+              RestartValue                  value,
+              const EclipseState&           es,
+              const EclipseGrid&            grid,
+              const Schedule&               schedule,
+              const SummaryState&           sumState,
+              bool                          write_double = false);
 
-    std::pair<RestartValue, SummaryState>
-    load(const std::string&             filename,
-         int                            report_step,
-         const std::vector<RestartKey>& solution_keys,
-         const EclipseState&            es,
-         const EclipseGrid&             grid,
-         const Schedule&                schedule,
-         const std::vector<RestartKey>& extra_keys = {});
+
+    RestartValue load(const std::string&             filename,
+                      int                            report_step,
+                      SummaryState&                  summary_state,
+                      const std::vector<RestartKey>& solution_keys,
+                      const EclipseState&            es,
+                      const EclipseGrid&             grid,
+                      const Schedule&                schedule,
+                      const std::vector<RestartKey>& extra_keys = {});
 
 }} // namespace Opm::RestartIO
 

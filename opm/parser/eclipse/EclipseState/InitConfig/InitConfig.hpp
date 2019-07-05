@@ -23,6 +23,7 @@
 #include <string>
 
 #include <opm/parser/eclipse/EclipseState/InitConfig/Equil.hpp>
+#include <opm/parser/eclipse/EclipseState/InitConfig/FoamConfig.hpp>
 
 namespace Opm {
 
@@ -41,12 +42,22 @@ namespace Opm {
         bool hasEquil() const;
         const Equil& getEquil() const;
 
+        bool hasFoamConfig() const;
+        const FoamConfig& getFoamConfig() const;
+
+        bool filleps() const
+        {
+            return this->m_filleps;
+        }
+
     private:
+        Equil equil;
+        FoamConfig foamconfig;
+        bool m_filleps;
+
         bool m_restartRequested = false;
         int m_restartStep = 0;
         std::string m_restartRootName;
-
-        Equil equil;
     };
 
 } //namespace Opm

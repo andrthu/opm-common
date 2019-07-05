@@ -62,28 +62,28 @@ std::vector<std::string> quote_split(const std::string& item) {
 }
 
 template <typename T>
-UDQDefine::UDQDefine(const UDQParams& udq_params,
+UDQDefine::UDQDefine(const UDQParams& udq_params_arg,
                      const std::string& keyword,
                      const std::vector<std::string>& deck_data,
                      const ParseContext& parseContext,
                      T&& errors) :
-    UDQDefine(udq_params, keyword, deck_data, parseContext, errors)
+    UDQDefine(udq_params_arg, keyword, deck_data, parseContext, errors)
 {}
 
 
-UDQDefine::UDQDefine(const UDQParams& udq_params,
+UDQDefine::UDQDefine(const UDQParams& udq_params_arg,
                      const std::string& keyword,
                      const std::vector<std::string>& deck_data) :
-    UDQDefine(udq_params, keyword, deck_data, ParseContext(), ErrorGuard())
+    UDQDefine(udq_params_arg, keyword, deck_data, ParseContext(), ErrorGuard())
 {}
 
 
-UDQDefine::UDQDefine(const UDQParams& udq_params,
+UDQDefine::UDQDefine(const UDQParams& udq_params_arg,
                      const std::string& keyword,
                      const std::vector<std::string>& deck_data,
                      const ParseContext& parseContext,
                      ErrorGuard& errors) :
-    udq_params(udq_params),
+    udq_params(udq_params_arg),
     m_keyword(keyword),
     m_var_type(UDQ::varType(keyword))
 {
@@ -121,28 +121,68 @@ UDQDefine::UDQDefine(const UDQParams& udq_params,
 
         }
     }
-    this->ast = std::make_shared<UDQASTNode>( UDQParser::parse(this->udq_params, tokens, parseContext, errors) );
-    this->tokens = tokens;
+    this->ast = std::make_shared<UDQASTNode>( UDQParser::parse(this->udq_params, this->m_var_type, this->m_keyword, tokens, parseContext, errors) );
+    this->input_tokens = tokens;
 }
 
 
-UDQWellSet UDQDefine::eval_wells(const UDQContext& context) const {
-    return this->ast->eval_wells(context);
-}
 
 UDQSet UDQDefine::eval(const UDQContext& context) const {
-    switch (this->m_var_type) {
-    case UDQVarType::WELL_VAR:
-        return this->eval_wells(context);
-    default:
-        throw std::invalid_argument("UDQ subtype: not supported");
+    UDQSet res = this->ast->eval(this->m_var_type, context);
+    if (!UDQ::compatibleTypes(this->var_type(), res.var_type())) {
+        std::string msg = "Invalid runtime type conversion detected when evaluating UDQ";
+        throw std::invalid_argument(msg);
     }
+
+    if (res.var_type() == UDQVarType::SCALAR) {
+        /*
+          If the right hand side evaluates to a scalar that scalar value should
+          be set for all wells in the wellset:
+
+          UDQ
+            DEFINE WUINJ1  SUM(WOPR) * 1.25 /
+            DEFINE WUINJ2  WOPR OP1  * 5.0 /
+          /
+
+          Both the expressions "SUM(WOPR)" and "WOPR OP1" evaluate to a scalar,
+          this should then be copied all wells, so that WUINJ1:$WELL should
+          evaulate to the same numerical value for all wells; the same should
+          also apply for group sets.
+        */
+
+        double scalar_value = res[0].value();
+        if (this->var_type() == UDQVarType::WELL_VAR) {
+            const std::vector<std::string> wells = context.wells();
+            UDQSet well_res = UDQSet::wells(this->m_keyword, wells);
+
+            for (const auto& well : wells)
+                well_res.assign(well, scalar_value);
+
+            return well_res;
+        }
+
+        if (this->var_type() == UDQVarType::GROUP_VAR) {
+            const std::vector<std::string> groups = context.groups();
+            UDQSet group_res = UDQSet::groups(this->m_keyword, groups);
+
+            for (const auto& group : groups)
+                group_res.assign(group, scalar_value);
+
+            return group_res;
+        }
+    }
+
+    return res;
 }
+
 
 UDQVarType UDQDefine::var_type() const {
     return this->m_var_type;
 }
 
+const std::vector<std::string>& UDQDefine::tokens() const {
+    return this->input_tokens;
+}
 
 const std::string& UDQDefine::keyword() const {
     return this->m_keyword;

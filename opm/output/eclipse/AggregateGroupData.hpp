@@ -20,8 +20,9 @@
 #ifndef OPM_AGGREGATE_GROUP_DATA_HPP
 #define OPM_AGGREGATE_GROUP_DATA_HPP
 
-#include <opm/output/eclipse/CharArrayNullTerm.hpp>
 #include <opm/output/eclipse/WindowedArray.hpp>
+
+#include <opm/io/eclipse/PaddedOutputString.hpp>
 
 #include <cstddef>
 #include <string>
@@ -57,11 +58,6 @@ namespace Opm { namespace RestartIO { namespace Helpers {
 	explicit AggregateGroupData(const std::vector<int>& inteHead);
 
 	void captureDeclaredGroupData(const Opm::Schedule&                 sched,
-				      const std::vector<std::string>&      restart_group_keys,
-				      const std::vector<std::string>&      restart_field_keys,
-				      const std::map<std::string, size_t>& groupKeyToIndex,
-				      const std::map<std::string, size_t>& fieldKeyToIndex,
-				      const bool                           ecl_compatible_rst,
 				      const std::size_t                    simStep,
 				      const Opm::SummaryState&             sumState,
 				      const std::vector<int>&              inteHead);
@@ -81,7 +77,7 @@ namespace Opm { namespace RestartIO { namespace Helpers {
             return this->xGroup_.data();
         }
 
-        const std::vector<CharArrayNullTerm<8>>& getZGroup() const
+        const std::vector<EclIO::PaddedOutputString<8>>& getZGroup() const
         {
             return this->zGroup_.data();
         }
@@ -159,7 +155,7 @@ namespace Opm { namespace RestartIO { namespace Helpers {
         WindowedArray<double> xGroup_;
 
         /// Aggregate 'ZWEL' array (Character) for all wells.
-        WindowedArray<CharArrayNullTerm<8>> zGroup_;
+        WindowedArray<EclIO::PaddedOutputString<8>> zGroup_;
 
         /// Maximum number of wells in a group.
         int nWGMax_;

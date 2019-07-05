@@ -45,8 +45,8 @@ namespace {
     {
         auto ncwmax = 0;
 
-        for (const auto* well : sched.getWells(lookup_step)) {
-            const auto ncw = well->getConnections().size();
+        for (const auto& well : sched.getWells2(lookup_step)) {
+            const auto ncw = well.getConnections().size();
 
             ncwmax = std::max(ncwmax, static_cast<int>(ncw));
         }
@@ -71,6 +71,7 @@ namespace {
 
     Opm::RestartIO::InteHEAD::WellTableDim
     getWellTableDims(const int              nwgmax,
+                     const int              ngmax,
                      const ::Opm::Runspec&  rspec,
                      const ::Opm::Schedule& sched,
                      const std::size_t      lookup_step)
@@ -86,7 +87,8 @@ namespace {
         const auto maxWellInGroup =
             std::max(wd.maxWellsPerGroup(), nwgmax);
 
-        const auto maxGroupInField = wd.maxGroupsInField();
+        const auto maxGroupInField =
+            std::max(wd.maxGroupsInField(), ngmax);
 
         return {
             numWells,
@@ -188,13 +190,13 @@ namespace {
     {
 	const auto& wsd = rspec.wellSegmentDimensions();
 
-        const auto& sched_wells = sched.getWells(lookup_step);
+        const auto& sched_wells = sched.getWells2(lookup_step);
 
         const auto nsegwl =
             std::count_if(std::begin(sched_wells), std::end(sched_wells),
-                [lookup_step](const Opm::Well* wellPtr)
+                          [](const Opm::Well2& well)
             {
-                return wellPtr->isMultiSegment(lookup_step);
+                return well.isMultiSegment();
             });
 
         const auto nswlmx = wsd.maxSegmentedWells();
@@ -258,7 +260,8 @@ createInteHead(const EclipseState& es,
         .dimensions         (grid.getNXYZ())
         .numActive          (static_cast<int>(grid.getNumActive()))
         .unitConventions    (getUnitConvention(es.getDeckUnitSystem()))
-        .wellTableDimensions(getWellTableDims(nwgmax, rspec, sched, lookup_step))
+        .wellTableDimensions(getWellTableDims(nwgmax, ngmax, rspec,
+                                              sched, lookup_step))
         .calendarDate       (getSimulationTimePoint(sched.posixStartTime(), simTime))
         .activePhases       (getActivePhases(rspec))
              // The numbers below have been determined experimentally to work

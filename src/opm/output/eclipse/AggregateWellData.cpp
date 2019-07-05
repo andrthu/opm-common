@@ -28,8 +28,8 @@
 #include <opm/parser/eclipse/EclipseState/Runspec.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/SummaryState.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/SummaryState.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/ScheduleEnums.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
 #include <opm/parser/eclipse/Units/UnitSystem.hpp>
 #include <opm/parser/eclipse/Units/Units.hpp>
 
@@ -39,6 +39,8 @@
 #include <cstring>
 #include <iterator>
 #include <string>
+
+
 
 namespace VI = Opm::RestartIO::Helpers::VectorItems;
 
@@ -73,17 +75,15 @@ namespace {
     }
 
     template <typename WellOp>
-    void wellLoop(const std::vector<const Opm::Well*>& wells,
-                  WellOp&&                             wellOp)
+    void wellLoop(const std::vector<Opm::Well2>& wells,
+                  WellOp&&                       wellOp)
     {
         for (auto nWell = wells.size(), wellID = 0*nWell;
              wellID < nWell; ++wellID)
         {
-            const auto* well = wells[wellID];
+            const auto& well = wells[wellID];
 
-            if (well == nullptr) { continue; }
-
-            wellOp(*well, wellID);
+            wellOp(well, wellID);
         }
     }
 
@@ -112,7 +112,7 @@ namespace {
 	    for (const auto* group : groups) {
 		int ind = (group->name() == "FIELD")
 			? inteHead[VI::intehead::NGMAXZ]-1 : group->seqIndex()-1;
-		std::pair<const std::string, size_t> groupPair = std::make_pair(group->name(), ind); 
+		std::pair<const std::string, size_t> groupPair = std::make_pair(group->name(), ind);
 		groupIndexMap.insert(groupPair);
 	    }
 	    return groupIndexMap;
@@ -133,20 +133,17 @@ namespace {
             return ind;
         }
 
-        int wellType(const Opm::Well&  well,
-                     const std::size_t sim_step)
+        int wellType(const Opm::Well2& well, const Opm::SummaryState& st)
         {
-            using WTypeVal = ::Opm::RestartIO::Helpers::
-                VectorItems::IWell::Value::WellType;
+            using WTypeVal = ::Opm::RestartIO::Helpers::VectorItems::IWell::Value::WellType;
 
-            if (well.isProducer(sim_step)) {
+            if (well.isProducer()) {
                 return WTypeVal::Producer;
             }
 
             using IType = ::Opm::WellInjector::TypeEnum;
 
-            const auto itype = well
-                .getInjectionProperties(sim_step).injectorType;
+            const auto itype = well.injectionControls(st).injector_type;
 
             switch (itype) {
             case IType::OIL:   return WTypeVal::OilInj;
@@ -156,28 +153,24 @@ namespace {
             }
         }
 
-        int wellVFPTab(const Opm::Well&  well,
-                       const std::size_t sim_step)
+        int wellVFPTab(const Opm::Well2& well, const Opm::SummaryState& st)
         {
-            if (well.isInjector(sim_step)) {
-                return well.getInjectionProperties(sim_step).VFPTableNumber;
+            Opm::SummaryState summaryState;
+            if (well.isInjector()) {
+                return well.injectionControls(st).vfp_table_number;
             }
-
-            return well.getProductionProperties(sim_step).VFPTableNumber;
+            return well.productionControls(st).vfp_table_number;
         }
 
-        int ctrlMode(const Opm::Well&  well,
-                     const std::size_t sim_step)
+        int ctrlMode(const Opm::Well2& well, const Opm::SummaryState& st)
         {
-            using WMCtrlVal = ::Opm::RestartIO::Helpers::
-                VectorItems::IWell::Value::WellCtrlMode;
+            using WMCtrlVal = ::Opm::RestartIO::Helpers::VectorItems::IWell::Value::WellCtrlMode;
 
-            if (well.isInjector(sim_step)) {
-                const auto& prop = well
-                    .getInjectionProperties(sim_step);
+            if (well.isInjector()) {
+                const auto& controls = well.injectionControls(st);
 
-                const auto wmctl = prop.controlMode;
-                const auto wtype = prop.injectorType;
+                const auto wmctl = controls.cmode;
+                const auto wtype = controls.injector_type;
 
                 using CMode = ::Opm::WellInjector::ControlModeEnum;
                 using WType = ::Opm::WellInjector::TypeEnum;
@@ -200,7 +193,7 @@ namespace {
 
                 default:
                 {
-                    const auto stat = well.getStatus(sim_step);
+                    const auto stat = well.getStatus();
 
                     using WStat = ::Opm::WellCommon::StatusEnum;
 
@@ -211,13 +204,12 @@ namespace {
                 return WMCtrlVal::WMCtlUnk;
                 }
             }
-            else if (well.isProducer(sim_step)) {
-                const auto& prop = well
-                    .getProductionProperties(sim_step);
+            else if (well.isProducer()) {
+                const auto& controls = well.productionControls(st);
 
                 using CMode = ::Opm::WellProducer::ControlModeEnum;
 
-                switch (prop.controlMode) {
+                switch (controls.cmode) {
                 case CMode::ORAT: return WMCtrlVal::OilRate;
                 case CMode::WRAT: return WMCtrlVal::WatRate;
                 case CMode::GRAT: return WMCtrlVal::GasRate;
@@ -230,7 +222,7 @@ namespace {
 
                 default:
                 {
-                    const auto stat = well.getStatus(sim_step);
+                    const auto stat = well.getStatus();
 
                     using WStat = ::Opm::WellCommon::StatusEnum;
 
@@ -245,7 +237,7 @@ namespace {
             return WMCtrlVal::WMCtlUnk;
         }
 
-        int compOrder(const Opm::Well& well)
+        int compOrder(const Opm::Well2& well)
         {
             using WCO   = ::Opm::WellCompletion::CompletionOrderEnum;
             using COVal = ::Opm::RestartIO::Helpers::
@@ -261,26 +253,24 @@ namespace {
         }
 
         template <class IWellArray>
-        void staticContrib(const Opm::Well&                well,
+        void staticContrib(const Opm::Well2&               well,
+                           const Opm::SummaryState&        st,
                            const std::size_t               msWellID,
                            const std::map <const std::string, size_t>&  GroupMapNameInd,
-			   /*const std::vector<std::string>& groupNames,*/
-                           const int                       maxGroups,
-                           const std::size_t               sim_step,
                            IWellArray&                     iWell)
         {
             using Ix = ::Opm::RestartIO::Helpers::VectorItems::IWell::index;
 
-            iWell[Ix::IHead] = well.getHeadI(sim_step) + 1;
-            iWell[Ix::JHead] = well.getHeadJ(sim_step) + 1;
+            iWell[Ix::IHead] = well.getHeadI() + 1;
+            iWell[Ix::JHead] = well.getHeadJ() + 1;
 
             // Connections
             {
-                const auto& conn = well.getConnections(sim_step);
+                const auto& conn = well.getConnections();
 
                 iWell[Ix::NConn]  = static_cast<int>(conn.size());
 
-                if (well.isMultiSegment(sim_step)) {
+                if (well.isMultiSegment()) {
                     // Set top and bottom connections to zero for multi
                     // segment wells
                     iWell[Ix::FirstK] = 0;
@@ -296,11 +286,10 @@ namespace {
             }
 
             iWell[Ix::Group] =
-                groupIndex(trim(well.getGroupName(sim_step)),
-                           GroupMapNameInd);
+                groupIndex(trim(well.groupName()), GroupMapNameInd);
 
-            iWell[Ix::WType]  = wellType  (well, sim_step);
-            iWell[Ix::VFPTab] = wellVFPTab(well, sim_step);
+            iWell[Ix::WType]  = wellType  (well, st);
+            iWell[Ix::VFPTab] = wellVFPTab(well, st);
             iWell[Ix::XFlow]  = well.getAllowCrossFlow() ? 1 : 0;
 
             // The following items aren't fully characterised yet, but
@@ -314,16 +303,9 @@ namespace {
             // the target control mode requested in the simulation deck.
             // This item is supposed to be the well's actual, active target
             // control mode in the simulator.
-            iWell[Ix::ActWCtrl] = ctrlMode(well, sim_step);
+            iWell[Ix::ActWCtrl] = ctrlMode(well, st);
 
-            const auto isPred =
-                (well.isProducer(sim_step) &&
-                 well.getProductionProperties(sim_step).predictionMode)
-                ||
-                (well.isInjector(sim_step) &&
-                 well.getInjectionProperties(sim_step).predictionMode);
-
-            if (isPred) {
+            if (well.predictionMode()) {
                 // Well in prediction mode (WCONPROD, WCONINJE).  Assign
                 // requested control mode for prediction.
                 iWell[Ix::PredReqWCtrl] = iWell[Ix::ActWCtrl];
@@ -339,10 +321,10 @@ namespace {
             // Multi-segmented well information
             iWell[Ix::MsWID] = 0;  // MS Well ID (0 or 1..#MS wells)
             iWell[Ix::NWseg] = 0;  // Number of well segments
-            if (well.isMultiSegment(sim_step)) {
+            if (well.isMultiSegment()) {
                 iWell[Ix::MsWID] = static_cast<int>(msWellID);
                 iWell[Ix::NWseg] =
-                    well.getWellSegments(sim_step).size();
+                    well.getSegments().size();
             }
 
             iWell[Ix::CompOrd] = compOrder(well);
@@ -387,19 +369,17 @@ namespace {
             return inteHead[VI::intehead::NSWELZ];
         }
 
-        float datumDepth(const Opm::Well&  well,
-                         const std::size_t sim_step)
+        float datumDepth(const Opm::Well2&  well)
         {
-            if (well.isMultiSegment(sim_step)) {
+            if (well.isMultiSegment()) {
                 // Datum depth for multi-segment wells is
                 // depth of top-most segment.
-                return well.getWellSegments(sim_step)
-                    .depthTopSegment();
+                return well.getSegments().depthTopSegment();
             }
 
             // Not a multi-segment well--i.e., this is a regular
             // well.  Use well's reference depth.
-            return well.getRefDepth(sim_step);
+            return well.getRefDepth();
         }
 
         Opm::RestartIO::Helpers::WindowedArray<float>
@@ -463,9 +443,8 @@ namespace {
         }
 
         template <class SWellArray>
-        void staticContrib(const Opm::Well&       well,
+        void staticContrib(const Opm::Well2&      well,
                            const Opm::UnitSystem& units,
-                           const std::size_t      sim_step,
                            const ::Opm::SummaryState& smry,
                            SWellArray&            sWell)
         {
@@ -479,39 +458,39 @@ namespace {
 
             assignDefaultSWell(sWell);
 
-            if (well.isProducer(sim_step)) {
-                const auto& pp = well.getProductionProperties(sim_step);
-                const auto& predMode = pp.predictionMode;
+            if (well.isProducer()) {
+                const auto& pc = well.productionControls(smry);
+                const auto& predMode = well.predictionMode();
 
-                if ((pp.OilRate != 0.0) || (!predMode)) {
+                if ((pc.oil_rate != 0.0) || (!predMode)) {
                     sWell[Ix::OilRateTarget] =
-                        swprop(M::liquid_surface_rate, pp.OilRate);
+                        swprop(M::liquid_surface_rate, pc.oil_rate);
                 }
 
-                if ((pp.WaterRate != 0.0) || (!predMode)) {
+                if ((pc.water_rate != 0.0) || (!predMode)) {
                     sWell[Ix::WatRateTarget] =
-                        swprop(M::liquid_surface_rate, pp.WaterRate);
+                        swprop(M::liquid_surface_rate, pc.water_rate);
                 }
 
-                if ((pp.GasRate != 0.0) || (!predMode)) {
+                if ((pc.gas_rate != 0.0) || (!predMode)) {
                     sWell[Ix::GasRateTarget] =
-                        swprop(M::gas_surface_rate, pp.GasRate);
+                        swprop(M::gas_surface_rate, pc.gas_rate);
                     sWell[Ix::HistGasRateTarget] = sWell[Ix::GasRateTarget];
                 }
 
-                if (pp.LiquidRate != 0.0 || (!predMode)) {
+                if (pc.liquid_rate != 0.0 || (!predMode)) {
                     sWell[Ix::LiqRateTarget] =
-                        swprop(M::liquid_surface_rate, pp.LiquidRate);
+                        swprop(M::liquid_surface_rate, pc.liquid_rate);
                     sWell[Ix::HistLiqRateTarget] = sWell[Ix::LiqRateTarget];
                 }
                 else  {
                     sWell[Ix::LiqRateTarget] =
-                        swprop(M::liquid_surface_rate, pp.OilRate + pp.WaterRate);
+                        swprop(M::liquid_surface_rate, pc.oil_rate + pc.water_rate);
                 }
 
-                if (pp.ResVRate != 0.0)  {
+                if (pc.resv_rate != 0.0)  {
                     sWell[Ix::ResVRateTarget] =
-                        swprop(M::rate, pp.ResVRate);
+                        swprop(M::rate, pc.resv_rate);
                 }
                 else if ((smry.has("WVPR:" + well.name())) && (!predMode)) {
                     // Write out summary voidage production rate if
@@ -522,55 +501,54 @@ namespace {
                     }
                 }
 
-                sWell[Ix::THPTarget] = pp.THPLimit != 0.0
-                    ? swprop(M::pressure, pp.THPLimit)
+                sWell[Ix::THPTarget] = pc.thp_limit != 0.0
+                    ? swprop(M::pressure, pc.thp_limit)
                     : 0.0;
 
-                sWell[Ix::BHPTarget] = pp.BHPLimit != 0.0
-                    ? swprop(M::pressure, pp.BHPLimit)
+                sWell[Ix::BHPTarget] = pc.bhp_limit != 0.0
+                    ? swprop(M::pressure, pc.bhp_limit)
                     : swprop(M::pressure, 1.0*::Opm::unit::atm);
                 sWell[Ix::HistBHPTarget] = sWell[Ix::BHPTarget];
             }
-            else if (well.isInjector(sim_step)) {
-                const auto& ip = well.getInjectionProperties(sim_step);
+            else if (well.isInjector()) {
+                const auto& ic = well.injectionControls(smry);
 
                 using IP = ::Opm::WellInjector::ControlModeEnum;
                 using IT = ::Opm::WellInjector::TypeEnum;
 
-                if (ip.hasInjectionControl(IP::RATE)) {
-                    if (ip.injectorType == IT::OIL) {
+                if (ic.hasControl(IP::RATE)) {
+                    if (ic.injector_type == IT::OIL) {
                         sWell[Ix::OilRateTarget] =
-                            swprop(M::liquid_surface_rate, ip.surfaceInjectionRate);
+                            swprop(M::liquid_surface_rate, ic.surface_rate);
                     }
-                    if (ip.injectorType == IT::WATER) {
+                    if (ic.injector_type == IT::WATER) {
                         sWell[Ix::WatRateTarget] =
-                            swprop(M::liquid_surface_rate, ip.surfaceInjectionRate);
+                            swprop(M::liquid_surface_rate, ic.surface_rate);
                         sWell[Ix::HistLiqRateTarget] = sWell[Ix::WatRateTarget];
                     }
-                    if (ip.injectorType == IT::GAS) {
+                    if (ic.injector_type == IT::GAS) {
                         sWell[Ix::GasRateTarget] =
-                            swprop(M::gas_surface_rate, ip.surfaceInjectionRate);
+                            swprop(M::gas_surface_rate, ic.surface_rate);
                         sWell[Ix::HistGasRateTarget] = sWell[Ix::GasRateTarget];
                     }
                 }
 
-                if (ip.hasInjectionControl(IP::RESV)) {
+                if (ic.hasControl(IP::RESV)) {
                     sWell[Ix::ResVRateTarget] =
-                        swprop(M::rate, ip.reservoirInjectionRate);
+                        swprop(M::rate, ic.reservoir_rate);
                 }
 
-                if (ip.hasInjectionControl(IP::THP)) {
-                    sWell[Ix::THPTarget] = swprop(M::pressure, ip.THPLimit);
+                if (ic.hasControl(IP::THP)) {
+                    sWell[Ix::THPTarget] = swprop(M::pressure, ic.thp_limit);
                 }
 
-                sWell[Ix::BHPTarget] = ip.hasInjectionControl(IP::BHP)
-                    ? swprop(M::pressure, ip.BHPLimit)
+                sWell[Ix::BHPTarget] = ic.hasControl(IP::BHP)
+                    ? swprop(M::pressure, ic.bhp_limit)
                     : swprop(M::pressure, 1.0E05*::Opm::unit::psia);
                 sWell[Ix::HistBHPTarget] = sWell[Ix::BHPTarget];
             }
 
-            sWell[Ix::DatumDepth] =
-                swprop(M::length, datumDepth(well, sim_step));
+            sWell[Ix::DatumDepth] = swprop(M::length, datumDepth(well));
         }
     } // SWell
 
@@ -595,17 +573,17 @@ namespace {
         }
 
         template <class XWellArray>
-        void staticContrib(const ::Opm::Well&     well,
+        void staticContrib(const ::Opm::Well2&    well,
+                           const Opm::SummaryState& st,
                            const Opm::UnitSystem& units,
-                           const std::size_t      sim_step,
                            XWellArray&            xWell)
         {
             using M  = ::Opm::UnitSystem::measure;
             using Ix = ::Opm::RestartIO::Helpers::VectorItems::XWell::index;
 
-            const auto bhpTarget = well.isInjector(sim_step)
-                ? well.getInjectionProperties (sim_step).BHPLimit
-                : well.getProductionProperties(sim_step).BHPLimit;
+            const auto bhpTarget = well.isInjector()
+                ? well.injectionControls(st).bhp_limit
+                : well.productionControls(st).bhp_limit;
 
             xWell[Ix::BHPTarget] = units.from_si(M::pressure, bhpTarget);
         }
@@ -613,7 +591,6 @@ namespace {
         template <class XWellArray>
         void assignProducer(const std::string&         well,
                             const ::Opm::SummaryState& smry,
-			    const bool  ecl_compatible_rst, 
                             XWellArray&                xWell)
         {
             using Ix = ::Opm::RestartIO::Helpers::VectorItems::XWell::index;
@@ -638,47 +615,39 @@ namespace {
             xWell[Ix::WatCut]  = get("WWCT");
             xWell[Ix::GORatio] = get("WGOR");
 
-            if (ecl_compatible_rst) {
-                xWell[Ix::OilPrTotal]  = get("WOPT");
-                xWell[Ix::WatPrTotal]  = get("WWPT");
-                xWell[Ix::GasPrTotal]  = get("WGPT");
-                xWell[Ix::VoidPrTotal] = get("WVPT");
-            }
+            xWell[Ix::OilPrTotal]  = get("WOPT");
+            xWell[Ix::WatPrTotal]  = get("WWPT");
+            xWell[Ix::GasPrTotal]  = get("WGPT");
+            xWell[Ix::VoidPrTotal] = get("WVPT");
 
             // Not fully characterised.
             xWell[Ix::item37] = xWell[Ix::WatPrRate];
             xWell[Ix::item38] = xWell[Ix::GasPrRate];
 
-            if (ecl_compatible_rst) {
-                xWell[Ix::HistOilPrTotal] = get("WOPTH");
-                xWell[Ix::HistWatPrTotal] = get("WWPTH");
-                xWell[Ix::HistGasPrTotal] = get("WGPTH");
-            }
+            xWell[Ix::HistOilPrTotal] = get("WOPTH");
+            xWell[Ix::HistWatPrTotal] = get("WWPTH");
+            xWell[Ix::HistGasPrTotal] = get("WGPTH");
         }
 
         template <class GetSummaryVector, class XWellArray>
         void assignCommonInjector(GetSummaryVector& get,
-                                  const bool        ecl_compatible_rst,
                                   XWellArray&       xWell)
         {
             using Ix = ::Opm::RestartIO::Helpers::VectorItems::XWell::index;
 
             xWell[Ix::FlowBHP] = get("WBHP");
 
-            if (ecl_compatible_rst) {
-                // Note: Assign both water and gas cumulatives to support
-                // case of well alternating between injecting water and gas.
-                xWell[Ix::WatInjTotal]     = get("WWIT");
-                xWell[Ix::GasInjTotal]     = get("WGIT");
-                xWell[Ix::HistWatInjTotal] = get("WWITH");
-                xWell[Ix::HistGasInjTotal] = get("WGITH");
-            }
+            // Note: Assign both water and gas cumulatives to support
+            // case of well alternating between injecting water and gas.
+            xWell[Ix::WatInjTotal]     = get("WWIT");
+            xWell[Ix::GasInjTotal]     = get("WGIT");
+            xWell[Ix::HistWatInjTotal] = get("WWITH");
+            xWell[Ix::HistGasInjTotal] = get("WGITH");
         }
 
         template <class XWellArray>
         void assignWaterInjector(const std::string&         well,
                                  const ::Opm::SummaryState& smry,
-				 const bool  ecl_compatible_rst, 
                                  XWellArray&                xWell)
         {
             using Ix = ::Opm::RestartIO::Helpers::VectorItems::XWell::index;
@@ -690,7 +659,7 @@ namespace {
                 return smry.has(key) ? smry.get(key) : 0.0;
             };
 
-            assignCommonInjector(get, ecl_compatible_rst, xWell);
+            assignCommonInjector(get, xWell);
 
             // Injection rates reported as negative.
             xWell[Ix::WatPrRate] = -get("WWIR");
@@ -705,7 +674,6 @@ namespace {
         template <class XWellArray>
         void assignGasInjector(const std::string&         well,
                                const ::Opm::SummaryState& smry,
-			       const bool  ecl_compatible_rst, 
                                XWellArray&                xWell)
         {
             using Ix = ::Opm::RestartIO::Helpers::VectorItems::XWell::index;
@@ -717,7 +685,7 @@ namespace {
                 return smry.has(key) ? smry.get(key) : 0.0;
             };
 
-            assignCommonInjector(get, ecl_compatible_rst, xWell);
+            assignCommonInjector(get, xWell);
 
             // Injection rates reported as negative production rates.
             xWell[Ix::GasPrRate]  = -get("WGIR");
@@ -738,20 +706,16 @@ namespace {
         }
 
         template <class XWellArray>
-        void dynamicContrib(const ::Opm::Well&         well,
+        void dynamicContrib(const ::Opm::Well2&        well,
                             const ::Opm::SummaryState& smry,
-                            const std::size_t          sim_step,
-			    const bool                 ecl_compatible_rst,
                             XWellArray&                xWell)
         {
-            if (well.isProducer(sim_step)) {
-                assignProducer(well.name(), smry, ecl_compatible_rst, xWell);
+            if (well.isProducer()) {
+                assignProducer(well.name(), smry, xWell);
             }
-            else if (well.isInjector(sim_step)) {
+            else if (well.isInjector()) {
                 using IType = ::Opm::WellInjector::TypeEnum;
-
-                const auto itype = well
-                    .getInjectionProperties(sim_step).injectorType;
+                const auto itype = well.injectionControls(smry).injector_type;
 
                 switch (itype) {
                 case IType::OIL:
@@ -759,16 +723,16 @@ namespace {
                     break;
 
                 case IType::WATER:
-                    assignWaterInjector(well.name(), smry, ecl_compatible_rst, xWell);
+                    assignWaterInjector(well.name(), smry, xWell);
                     break;
 
                 case IType::GAS:
-                    assignGasInjector(well.name(), smry, ecl_compatible_rst, xWell);
+                    assignGasInjector(well.name(), smry, xWell);
                     break;
 
                 case IType::MULTI:
-                    assignWaterInjector(well.name(), smry, ecl_compatible_rst, xWell);
-                    assignGasInjector  (well.name(), smry, ecl_compatible_rst, xWell);
+                    assignWaterInjector(well.name(), smry, xWell);
+                    assignGasInjector  (well.name(), smry, xWell);
                     break;
                 }
             }
@@ -785,12 +749,12 @@ namespace {
         }
 
         Opm::RestartIO::Helpers::WindowedArray<
-            Opm::RestartIO::Helpers::CharArrayNullTerm<8>
+            Opm::EclIO::PaddedOutputString<8>
         >
         allocate(const std::vector<int>& inteHead)
         {
             using WV = Opm::RestartIO::Helpers::WindowedArray<
-                Opm::RestartIO::Helpers::CharArrayNullTerm<8>
+                Opm::EclIO::PaddedOutputString<8>
             >;
 
             return WV {
@@ -800,7 +764,7 @@ namespace {
         }
 
         template <class ZWellArray>
-        void staticContrib(const Opm::Well& well, ZWellArray& zWell)
+        void staticContrib(const Opm::Well2& well, ZWellArray& zWell)
         {
             using Ix = ::Opm::RestartIO::Helpers::VectorItems::ZWell::index;
 
@@ -827,49 +791,48 @@ Opm::RestartIO::Helpers::AggregateWellData::
 captureDeclaredWellData(const Schedule&   sched,
                         const UnitSystem& units,
                         const std::size_t sim_step,
-			const ::Opm::SummaryState&  smry,
-			const std::vector<int>& inteHead)
+                        const ::Opm::SummaryState&  smry,
+                        const std::vector<int>& inteHead)
 {
-    const auto& wells = sched.getWells(sim_step);
+    const auto& wells = sched.getWells2(sim_step);
 
     // Static contributions to IWEL array.
     {
         //const auto grpNames = groupNames(sched.getGroups());
-	const auto groupMapNameIndex = IWell::currentGroupMapNameIndex(sched, sim_step, inteHead);
+        const auto groupMapNameIndex = IWell::currentGroupMapNameIndex(sched, sim_step, inteHead);
         auto msWellID       = std::size_t{0};
 
-        wellLoop(wells, [&groupMapNameIndex, &msWellID, sim_step, this]
-            (const Well& well, const std::size_t wellID) -> void
+        wellLoop(wells, [&groupMapNameIndex, &msWellID, &smry, this]
+            (const Well2& well, const std::size_t wellID) -> void
         {
-            msWellID += well.isMultiSegment(sim_step);  // 1-based index.
+            msWellID += well.isMultiSegment();  // 1-based index.
             auto iw   = this->iWell_[wellID];
 
-            IWell::staticContrib(well, msWellID, groupMapNameIndex,
-                                 this->nWGMax_, sim_step, iw);
+            IWell::staticContrib(well, smry, msWellID, groupMapNameIndex, iw);
         });
     }
 
     // Static contributions to SWEL array.
-    wellLoop(wells, [&units, sim_step, &smry, this]
-        (const Well& well, const std::size_t wellID) -> void
+    wellLoop(wells, [&units, &smry, this]
+        (const Well2& well, const std::size_t wellID) -> void
     {
         auto sw = this->sWell_[wellID];
 
-        SWell::staticContrib(well, units, sim_step, smry, sw);
+        SWell::staticContrib(well, units, smry, sw);
     });
 
     // Static contributions to XWEL array.
-    wellLoop(wells, [&units, sim_step, this]
-        (const Well& well, const std::size_t wellID) -> void
+    wellLoop(wells, [&units, &smry, this]
+        (const Well2& well, const std::size_t wellID) -> void
     {
         auto xw = this->xWell_[wellID];
 
-        XWell::staticContrib(well, units, sim_step, xw);
+        XWell::staticContrib(well, smry, units, xw);
     });
 
     // Static contributions to ZWEL array.
     wellLoop(wells,
-        [this](const Well& well, const std::size_t wellID) -> void
+        [this](const Well2& well, const std::size_t wellID) -> void
     {
         auto zw = this->zWell_[wellID];
 
@@ -883,15 +846,14 @@ void
 Opm::RestartIO::Helpers::AggregateWellData::
 captureDynamicWellData(const Schedule&             sched,
                        const std::size_t           sim_step,
-		       const bool ecl_compatible_rst,
                        const Opm::data::WellRates& xw,
                        const ::Opm::SummaryState&  smry)
 {
-    const auto& wells = sched.getWells(sim_step);
+    const auto& wells = sched.getWells2(sim_step);
 
     // Dynamic contributions to IWEL array.
     wellLoop(wells, [this, &xw]
-        (const Well& well, const std::size_t wellID) -> void
+        (const Well2& well, const std::size_t wellID) -> void
     {
         auto iWell = this->iWell_[wellID];
 
@@ -905,11 +867,11 @@ captureDynamicWellData(const Schedule&             sched,
     });
 
     // Dynamic contributions to XWEL array.
-    wellLoop(wells, [this, sim_step, ecl_compatible_rst, &smry]
-        (const Well& well, const std::size_t wellID) -> void
+    wellLoop(wells, [this, &smry]
+        (const Well2& well, const std::size_t wellID) -> void
     {
-        auto xw = this->xWell_[wellID];
+        auto xwell = this->xWell_[wellID];
 
-        XWell::dynamicContrib(well, smry, sim_step, ecl_compatible_rst, xw);
+        XWell::dynamicContrib(well, smry, xwell);
     });
 }

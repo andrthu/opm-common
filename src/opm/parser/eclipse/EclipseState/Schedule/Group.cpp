@@ -21,7 +21,6 @@
 
 #include <opm/parser/eclipse/EclipseState/Schedule/DynamicState.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Group.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
 
 #define INVALID_GROUP_RATE -999e100
 #define INVALID_EFFICIENCY_FACTOR 0.0
@@ -291,9 +290,9 @@ namespace Opm {
         return this->m_wells.at( time_step ).size();
     }
 
-    void Group::addWell(size_t time_step, const Well* well ) {
+  void Group::addWell(size_t time_step, const std::string& well_name ) {
         auto new_set = this->m_wells.at( time_step );
-        new_set.insert( well->name() );
+        new_set.insert( well_name );
         this->m_wells.update( time_step, new_set );
     }
 

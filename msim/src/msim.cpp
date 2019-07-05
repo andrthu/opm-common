@@ -33,31 +33,35 @@
 
 namespace Opm {
 
-msim::msim(const EclipseState& state) :
-    state(state)
+msim::msim(const EclipseState& state_arg) :
+    state(state_arg)
 {}
 
-void msim::run(Schedule& schedule, EclipseIO& io) {
+void msim::run(Schedule& schedule, EclipseIO& io, bool report_only) {
     const double week = 7 * 86400;
     data::Solution sol;
     data::Wells well_data;
+    SummaryState st;
 
     io.writeInitial();
     for (size_t report_step = 1; report_step < schedule.size(); report_step++) {
-        double time_step = std::min(week, 0.5*schedule.stepLength(report_step - 1));
-        run_step(schedule, sol, well_data, report_step, time_step, io);
-        post_step(schedule, sol, well_data, report_step, io);
+        if (report_only)
+            run_step(schedule, st, sol, well_data, report_step, io);
+        else {
+            double time_step = std::min(week, 0.5*schedule.stepLength(report_step - 1));
+            run_step(schedule, st, sol, well_data, report_step, time_step, io);
+        }
+        post_step(schedule, st, sol, well_data, report_step);
     }
 }
 
 
-void msim::post_step(Schedule& schedule, data::Solution& sol, data::Wells& well_data, size_t report_step, EclipseIO& io) const {
+void msim::post_step(Schedule& schedule, const SummaryState& st, data::Solution& /* sol */, data::Wells& /* well_data */, size_t report_step) const {
     const auto& actions = schedule.actions();
     if (actions.empty())
         return;
 
-    const SummaryState& summary_state = io.summaryState();
-    ActionContext context( summary_state );
+    ActionContext context( st );
     std::vector<std::string> matching_wells;
 
     auto sim_time = schedule.simTime(report_step);
@@ -69,12 +73,12 @@ void msim::post_step(Schedule& schedule, data::Solution& sol, data::Wells& well_
 
 
 
-void msim::run_step(const Schedule& schedule, data::Solution& sol, data::Wells& well_data, size_t report_step, EclipseIO& io) const {
-    this->run_step(schedule, sol, well_data, report_step, schedule.stepLength(report_step - 1), io);
+void msim::run_step(const Schedule& schedule, SummaryState& st, data::Solution& sol, data::Wells& well_data, size_t report_step, EclipseIO& io) const {
+    this->run_step(schedule, st, sol, well_data, report_step, schedule.stepLength(report_step - 1), io);
 }
 
 
-void msim::run_step(const Schedule& schedule, data::Solution& sol, data::Wells& well_data, size_t report_step, double dt, EclipseIO& io) const {
+void msim::run_step(const Schedule& schedule, SummaryState& st, data::Solution& sol, data::Wells& well_data, size_t report_step, double dt, EclipseIO& io) const {
     double start_time = schedule.seconds(report_step - 1);
     double end_time = schedule.seconds(report_step);
     double seconds_elapsed = start_time;
@@ -84,10 +88,20 @@ void msim::run_step(const Schedule& schedule, data::Solution& sol, data::Wells& 
         if ((seconds_elapsed + time_step) > end_time)
             time_step = end_time - seconds_elapsed;
 
-        this->simulate(schedule, sol, well_data, report_step, seconds_elapsed, time_step);
+        this->simulate(schedule, st, sol, well_data, report_step, seconds_elapsed, time_step);
 
         seconds_elapsed += time_step;
-        this->output(report_step,
+
+        io.summary().eval(st,
+                          report_step,
+                          seconds_elapsed,
+                          this->state,
+                          schedule,
+                          well_data,
+                          {});
+
+        this->output(st,
+                     report_step,
                      (seconds_elapsed < end_time),
                      seconds_elapsed,
                      sol,
@@ -98,19 +112,17 @@ void msim::run_step(const Schedule& schedule, data::Solution& sol, data::Wells& 
 
 
 
-void msim::output(size_t report_step, bool substep, double seconds_elapsed, const data::Solution& sol, const data::Wells& well_data, EclipseIO& io) const {
+void msim::output(SummaryState& st, size_t report_step, bool /* substep */, double seconds_elapsed, const data::Solution& sol, const data::Wells& well_data, EclipseIO& io) const {
     RestartValue value(sol, well_data);
-    io.writeTimeStep(report_step,
+    io.writeTimeStep(st,
+                     report_step,
                      false,
                      seconds_elapsed,
-                     value,
-                     {},
-                     {},
-                     {});
+                     value);
 }
 
 
-void msim::simulate(const Schedule& schedule, data::Solution& sol, data::Wells& well_data, size_t report_step, double seconds_elapsed, double time_step) const {
+void msim::simulate(const Schedule& schedule, const SummaryState& st, data::Solution& sol, data::Wells& well_data, size_t report_step, double seconds_elapsed, double time_step) const {
     for (const auto& sol_pair : this->solutions) {
         auto func = sol_pair.second;
         func(this->state, schedule, sol, report_step, seconds_elapsed + time_step);
@@ -123,7 +135,7 @@ void msim::simulate(const Schedule& schedule, data::Solution& sol, data::Wells& 
             auto rate = rate_pair.first;
             auto func = rate_pair.second;
 
-            well.rates.set(rate, func(this->state, schedule, sol, report_step, seconds_elapsed + time_step));
+            well.rates.set(rate, func(this->state, schedule, st, sol, report_step, seconds_elapsed + time_step));
         }
 
         // This is complete bogus; a temporary fix to pass an assert() in the

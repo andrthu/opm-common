@@ -51,7 +51,7 @@ inline Deck createAquifetpDeck() {
   "SOLUTION\n"
   "\n"
   "AQUFETP\n"
-  "1  70000.0  4.0e3 2.0e9 1.0e-5	500 1 0	0\n"
+  "1  70000.0  4.0e3 2.0e9 1.0e-5	500 1 0	0 /\n"
   "/\n";
 
   Parser parser;
@@ -122,7 +122,7 @@ inline Deck createAquifetpDeck_defaultPressure(){
   "SOLUTION\n"
   "\n"
   "AQUFETP\n"
-  "1  70000.0  1* 2.0e9 1.0e-5	500 1 0	0\n"
+  "1  70000.0  1* 2.0e9 1.0e-5	500 1 0	0 /\n"
   "/\n";
 
   Parser parser;
@@ -144,7 +144,7 @@ BOOST_AUTO_TEST_CASE(AquifetpTest){
     BOOST_CHECK_EQUAL(it.V0, 2.0e9);
     BOOST_CHECK_EQUAL(it.J, 500/86400e5);
   }
-  
+
   auto aqufetp_deck_null = createNullAquifetpDeck();
   std::vector< Aquifetp::AQUFETP_data > aquifetp_null = init_aquifetp(aqufetp_deck_null);
   BOOST_CHECK_EQUAL(aquifetp_null.size(), 0);

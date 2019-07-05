@@ -40,14 +40,15 @@
 #include <opm/parser/eclipse/EclipseState/Schedule/UDQ/UDQContext.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Group.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well/WellProductionProperties.hpp>
 #include <opm/parser/eclipse/EclipseState/SummaryConfig/SummaryConfig.hpp>
 #include <opm/parser/eclipse/Units/UnitSystem.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/SummaryState.hpp>
 
 #include <opm/output/eclipse/Summary.hpp>
 #include <opm/output/eclipse/RegionCache.hpp>
+
+#include "src/opm/parser/eclipse/EclipseState/Schedule/Well/WellProductionProperties.hpp"
+#include "src/opm/parser/eclipse/EclipseState/Schedule/Well/WellInjectionProperties.hpp"
 
 namespace {
     struct SegmentResultDescriptor
@@ -85,9 +86,7 @@ namespace {
             }
         };
 
-        for (const auto* well : sched.getWells()) {
-            const auto& well_name = well->name();
-
+        for (const auto& well_name : sched.wellNames()) {
             makeEntities('W', well_name);
 
             entities.emplace_back("WBHP" , well_name);
@@ -124,17 +123,15 @@ namespace {
             ret.push_back(SRD{"SPR" , well, segNumber});
         };
 
-        const auto last_timestep = sched.getTimeMap().last();
-
-        for (const auto* well : sched.getWells()) {
-            if (! well->isMultiSegment(last_timestep)) {
+        for (const auto& well : sched.getWells2atEnd()) {
+            if (! well.isMultiSegment()) {
                 // Don't allocate MS summary vectors for non-MS wells.
                 continue;
             }
 
-            const auto& wname = well->name();
+            const auto& wname = well.name();
             const auto  nSeg  =
-                well->getWellSegments(last_timestep).size();
+                well.getSegments().size();
 
             for (auto segID = 0*nSeg; segID < nSeg; ++segID) {
                 makeVectors(wname, segID + 1); // One-based
@@ -291,10 +288,11 @@ struct quantity {
  * is the index of the block in question. wells is simulation data.
  */
 struct fn_args {
-    const std::vector< const Well* >& schedule_wells;
+    const std::vector<Well2>& schedule_wells;
     double duration;
     const int sim_step;
     int  num;
+    const SummaryState& st;
     const data::Wells& wells;
     const out::RegionCache& regionCache;
     const EclipseGrid& grid;
@@ -359,14 +357,14 @@ template< rt phase, bool injection = true, bool polymer = false >
 inline quantity rate( const fn_args& args ) {
     double sum = 0.0;
 
-    for( const auto* sched_well : args.schedule_wells ) {
-        const auto& name = sched_well->name();
+    for( const auto& sched_well : args.schedule_wells ) {
+        const auto& name = sched_well.name();
         if( args.wells.count( name ) == 0 ) continue;
 
         double eff_fac = efac( args.eff_factors, name );
 
         double concentration = polymer
-                             ? sched_well->getPolymerProperties( args.sim_step ).m_polymerConcentration
+                             ? sched_well.getPolymerProperties().m_polymerConcentration
                              : 1;
 
         const auto v = args.wells.at(name).rates.get(phase, 0.0) * eff_fac * concentration;
@@ -384,10 +382,9 @@ inline quantity rate( const fn_args& args ) {
 template< bool injection >
 inline quantity flowing( const fn_args& args ) {
     const auto& wells = args.wells;
-    const auto ts = args.sim_step;
-    auto pred = [&wells,ts]( const Well* w ) {
-        const auto& name = w->name();
-        return w->isInjector( ts ) == injection
+    auto pred = [&wells]( const Well2& w ) {
+        const auto& name = w.name();
+        return w.isInjector( ) == injection
             && wells.count( name ) > 0
             && wells.at( name ).flowing();
     };
@@ -409,7 +406,7 @@ inline quantity crate( const fn_args& args ) {
     if( args.schedule_wells.empty() ) return zero;
 
     const auto& well = args.schedule_wells.front();
-    const auto& name = well->name();
+    const auto& name = well.name();
     if( args.wells.count( name ) == 0 ) return zero;
 
     const auto& well_data = args.wells.at( name );
@@ -423,7 +420,7 @@ inline quantity crate( const fn_args& args ) {
 
     double eff_fac = efac( args.eff_factors, name );
     double concentration = polymer
-                           ? well->getPolymerProperties( args.sim_step ).m_polymerConcentration
+                           ? well.getPolymerProperties().m_polymerConcentration
                            : 1;
 
     auto v = completion->rates.get( phase, 0.0 ) * eff_fac * concentration;
@@ -445,7 +442,7 @@ inline quantity srate( const fn_args& args ) {
     if( args.schedule_wells.empty() ) return zero;
 
     const auto& well = args.schedule_wells.front();
-    const auto& name = well->name();
+    const auto& name = well.name();
     if( args.wells.count( name ) == 0 ) return zero;
 
     const auto& well_data = args.wells.at( name );
@@ -456,7 +453,7 @@ inline quantity srate( const fn_args& args ) {
 
     double eff_fac = efac( args.eff_factors, name );
     double concentration = polymer
-                           ? well->getPolymerProperties( args.sim_step ).m_polymerConcentration
+                           ? well.getPolymerProperties().m_polymerConcentration
                            : 1;
 
     auto v = segment->second.rates.get( phase, 0.0 ) * eff_fac * concentration;
@@ -476,11 +473,11 @@ inline quantity trans_factors ( const fn_args& args ) {
     const size_t global_index = args.num - 1;
 
     const auto& well = args.schedule_wells.front();
-    const auto& name = well->name();
+    const auto& name = well.name();
     if( args.wells.count( name ) == 0 ) return zero;
 
     const auto& grid = args.grid;
-    const auto& connections = well->getConnections(args.sim_step);
+    const auto& connections = well.getConnections();
 
     const auto& connection = std::find_if(
         connections.begin(),
@@ -505,7 +502,7 @@ inline quantity spr ( const fn_args& args ) {
     if( args.schedule_wells.empty() ) return zero;
 
     const auto& well = args.schedule_wells.front();
-    const auto& name = well->name();
+    const auto& name = well.name();
     if( args.wells.count( name ) == 0 ) return zero;
 
     const auto& well_data = args.wells.at( name );
@@ -524,7 +521,7 @@ inline quantity bhp( const fn_args& args ) {
     const quantity zero = { 0, measure::pressure };
     if( args.schedule_wells.empty() ) return zero;
 
-    const auto p = args.wells.find( args.schedule_wells.front()->name() );
+    const auto p = args.wells.find( args.schedule_wells.front().name() );
     if( p == args.wells.end() ) return zero;
 
     return { p->second.bhp, measure::pressure };
@@ -534,7 +531,7 @@ inline quantity thp( const fn_args& args ) {
     const quantity zero = { 0, measure::pressure };
     if( args.schedule_wells.empty() ) return zero;
 
-    const auto p = args.wells.find( args.schedule_wells.front()->name() );
+    const auto p = args.wells.find( args.schedule_wells.front().name() );
     if( p == args.wells.end() ) return zero;
 
     return { p->second.thp, measure::pressure };
@@ -543,13 +540,13 @@ inline quantity thp( const fn_args& args ) {
 inline quantity bhp_history( const fn_args& args ) {
     if( args.schedule_wells.empty() ) return { 0.0, measure::pressure };
 
-    const Well* sched_well = args.schedule_wells.front();
+    const Well2& sched_well = args.schedule_wells.front();
 
     double bhp_hist;
-    if ( sched_well->isProducer( args.sim_step ) )
-        bhp_hist = sched_well->getProductionProperties( args.sim_step ).BHPH;
+    if ( sched_well.isProducer(  ) )
+        bhp_hist = sched_well.getProductionProperties().BHPH;
     else
-        bhp_hist = sched_well->getInjectionProperties( args.sim_step ).BHPH;
+        bhp_hist = sched_well.getInjectionProperties().BHPH;
 
     return { bhp_hist, measure::pressure };
 }
@@ -557,13 +554,13 @@ inline quantity bhp_history( const fn_args& args ) {
 inline quantity thp_history( const fn_args& args ) {
     if( args.schedule_wells.empty() ) return { 0.0, measure::pressure };
 
-    const Well* sched_well = args.schedule_wells.front();
+    const Well2& sched_well = args.schedule_wells.front();
 
     double thp_hist;
-    if ( sched_well->isProducer( args.sim_step ) )
-       thp_hist = sched_well->getProductionProperties( args.sim_step ).THPH;
+    if ( sched_well.isProducer() )
+       thp_hist = sched_well.getProductionProperties().THPH;
     else
-       thp_hist = sched_well->getInjectionProperties( args.sim_step ).THPH;
+       thp_hist = sched_well.getInjectionProperties().THPH;
 
     return { thp_hist, measure::pressure };
 }
@@ -578,10 +575,10 @@ inline quantity production_history( const fn_args& args ) {
      */
 
     double sum = 0.0;
-    for( const Well* sched_well : args.schedule_wells ){
+    for( const auto& sched_well : args.schedule_wells ){
 
-        double eff_fac = efac( args.eff_factors, sched_well->name() );
-        sum += sched_well->production_rate( phase, args.sim_step ) * eff_fac;
+        double eff_fac = efac( args.eff_factors, sched_well.name() );
+        sum += sched_well.production_rate( args.st, phase ) * eff_fac;
     }
 
 
@@ -592,10 +589,9 @@ template< Phase phase >
 inline quantity injection_history( const fn_args& args ) {
 
     double sum = 0.0;
-    for( const Well* sched_well : args.schedule_wells ){
-
-        double eff_fac = efac( args.eff_factors, sched_well->name() );
-        sum += sched_well->injection_rate( phase, args.sim_step ) * eff_fac;
+    for( const auto& sched_well : args.schedule_wells ){
+        double eff_fac = efac( args.eff_factors, sched_well.name() );
+        sum += sched_well.injection_rate( args.st, phase ) * eff_fac;
     }
 
 
@@ -605,9 +601,9 @@ inline quantity injection_history( const fn_args& args ) {
 inline quantity res_vol_production_target( const fn_args& args ) {
 
     double sum = 0.0;
-    for( const Well* sched_well : args.schedule_wells )
-        if (sched_well->getProductionProperties(args.sim_step).predictionMode)
-            sum += sched_well->getProductionProperties( args.sim_step ).ResVRate;
+    for( const Well2& sched_well : args.schedule_wells )
+        if (sched_well.getProductionProperties().predictionMode)
+            sum += sched_well.getProductionProperties().ResVRate.get<double>();
 
     return { sum, measure::rate };
 }
@@ -663,15 +659,15 @@ template < rt phase, bool outputProducer = true, bool outputInjector = true>
 inline quantity potential_rate( const fn_args& args ) {
     double sum = 0.0;
 
-    for( const auto* sched_well : args.schedule_wells ) {
-        const auto& name = sched_well->name();
+    for( const auto& sched_well : args.schedule_wells ) {
+        const auto& name = sched_well.name();
         if( args.wells.count( name ) == 0 ) continue;
 
-        if (sched_well->isInjector(args.sim_step) && outputInjector) {
+        if (sched_well.isInjector() && outputInjector) {
 	    const auto v = args.wells.at(name).rates.get(phase, 0.0);
 	    sum += v;
 	}
-	else if (sched_well->isProducer(args.sim_step) && outputProducer) {
+	else if (sched_well.isProducer() && outputProducer) {
 	    const auto v = args.wells.at(name).rates.get(phase, 0.0);
 	    sum += v;
 	}
@@ -1064,12 +1060,27 @@ static const std::unordered_map< std::string, UnitSystem::measure> block_units =
   {"BWSAT"      , UnitSystem::measure::identity},
   {"BSGAS"      , UnitSystem::measure::identity},
   {"BGSAT"      , UnitSystem::measure::identity},
+  {"BOSAT"      , UnitSystem::measure::identity},
+  {"BWKR"      , UnitSystem::measure::identity},
+  {"BOKR"      , UnitSystem::measure::identity},
+  {"BKRO"      , UnitSystem::measure::identity},
+  {"BGKR"      , UnitSystem::measure::identity},
+  {"BKRG"      , UnitSystem::measure::identity},
+  {"BKRW"      , UnitSystem::measure::identity},
+  {"BWPC"      , UnitSystem::measure::pressure},
+  {"BGPC"      , UnitSystem::measure::pressure},
+  {"BVWAT"      , UnitSystem::measure::viscosity},
+  {"BWVIS"      , UnitSystem::measure::viscosity}, 
+  {"BVGAS"      , UnitSystem::measure::viscosity},
+  {"BGVIS"      , UnitSystem::measure::viscosity}, 
+  {"BVOIL"      , UnitSystem::measure::viscosity},
+  {"BOVIS"      , UnitSystem::measure::viscosity}, 
 };
 
-inline std::vector< const Well* > find_wells( const Schedule& schedule,
-                                              const ecl::smspec_node* node,
-                                              const int sim_step,
-                                              const out::RegionCache& regionCache ) {
+inline std::vector<Well2> find_wells( const Schedule& schedule,
+                                      const ecl::smspec_node* node,
+                                      const int sim_step,
+                                      const out::RegionCache& regionCache ) {
 
     const auto* name = smspec_node_get_wgname( node );
     const auto type = smspec_node_get_var_type( node );
@@ -1078,34 +1089,38 @@ inline std::vector< const Well* > find_wells( const Schedule& schedule,
         (type == ECL_SMSPEC_COMPLETION_VAR) ||
         (type == ECL_SMSPEC_SEGMENT_VAR))
     {
-        const auto* well = schedule.getWell( name );
-        if( !well ) return {};
-        return { well };
+        if (schedule.hasWell(name, sim_step)) {
+            const auto& well = schedule.getWell2( name, sim_step );
+            return { well };
+        } else
+            return {};
     }
 
     if( type == ECL_SMSPEC_GROUP_VAR ) {
         if( !schedule.hasGroup( name ) ) return {};
 
-        return schedule.getWells( name, sim_step );
+        return schedule.getChildWells2( name, sim_step, GroupWellQueryMode::Recursive);
     }
 
     if( type == ECL_SMSPEC_FIELD_VAR )
-        return schedule.getWells();
+        return schedule.getWells2(sim_step);
 
     if( type == ECL_SMSPEC_REGION_VAR ) {
-        std::vector< const Well* > wells;
+        std::vector<Well2> wells;
 
         const auto region = smspec_node_get_num( node );
 
         for ( const auto& connection : regionCache.connections( region ) ){
             const auto& w_name = connection.first;
-            const auto& well = schedule.getWell( w_name );
+            if (schedule.hasWell(w_name, sim_step)) {
+                const auto& well = schedule.getWell2( w_name, sim_step );
 
-            const auto& it = std::find_if( wells.begin(), wells.end(),
-                                           [&] ( const Well* elem )
-                                           { return *elem == *well; });
-            if ( it == wells.end() )
-                wells.push_back( schedule.getWell( w_name ) );
+                const auto& it = std::find_if( wells.begin(), wells.end(),
+                                               [&] ( const Well2& elem )
+                                               { return elem.name() == well.name(); });
+                if ( it == wells.end() )
+                    wells.push_back( schedule.getWell2( w_name, sim_step ));
+            }
         }
 
         return wells;
@@ -1113,6 +1128,39 @@ inline std::vector< const Well* > find_wells( const Schedule& schedule,
 
     return {};
 }
+
+
+bool need_wells(ecl_smspec_var_type var_type, const std::string& keyword) {
+    static const std::set<std::string> region_keywords{"ROIR", "RGIR", "RWIR", "ROPR", "RGPR", "RWPR", "ROIT", "RWIT", "RGIT", "ROPT", "RGPT", "RWPT"};
+    if (var_type == ECL_SMSPEC_WELL_VAR)
+        return true;
+
+    if (var_type == ECL_SMSPEC_GROUP_VAR)
+        return true;
+
+    if (var_type == ECL_SMSPEC_FIELD_VAR)
+        return true;
+
+    if (var_type == ECL_SMSPEC_COMPLETION_VAR)
+        return true;
+
+    if (var_type == ECL_SMSPEC_SEGMENT_VAR)
+        return true;
+
+    /*
+      Some of the region keywords are based on summing over all the connections
+      which fall in the region; i.e. RGIR is the total gas injection rate in the
+      region and consequently the list of defined wells is required, other
+      region keywords like 'ROIP' do not require well information.
+    */
+    if (var_type == ECL_SMSPEC_REGION_VAR) {
+        if (region_keywords.count(keyword) > 0)
+            return true;
+    }
+
+    return false;
+}
+
 
 
 bool is_udq(const std::string& keyword) {
@@ -1123,27 +1171,33 @@ void eval_udq(const Schedule& schedule, std::size_t sim_step, SummaryState& st)
 {
     const UDQInput& udq = schedule.getUDQConfig(sim_step);
     const auto& func_table = udq.function_table();
-    UDQContext context(func_table, st);
+    UDQContext context(udq.params(), func_table, st);
     std::vector<std::string> wells;
-    for (const auto* well : schedule.getWells())
-        wells.push_back(well->name());
+    for (const auto& well_name : schedule.wellNames())
+        wells.push_back(well_name);
 
     for (const auto& assign : udq.assignments(UDQVarType::WELL_VAR)) {
-        auto ws = assign.eval_wells(wells);
+        auto ws = assign.eval(wells);
         for (const auto& well : wells) {
             const auto& udq_value = ws[well];
             if (udq_value)
-                st.add_well_var(well, ws.name(), udq_value.value());
+                st.update_well_var(well, ws.name(), udq_value.value());
         }
     }
 
     for (const auto& def : udq.definitions(UDQVarType::WELL_VAR)) {
-        auto ws = def.eval_wells(context);
+        auto ws = def.eval(context);
         for (const auto& well : wells) {
             const auto& udq_value = ws[well];
             if (udq_value)
-                st.add_well_var(well, def.keyword(), udq_value.value());
+                st.update_well_var(well, def.keyword(), udq_value.value());
         }
+    }
+
+    for (const auto& def : udq.definitions(UDQVarType::FIELD_VAR)) {
+        auto field_udq = def.eval(context);
+        if (field_udq[0])
+            st.update(def.keyword(), field_udq[0].value());
     }
 }
 }
@@ -1199,9 +1253,6 @@ Summary::Summary( const EclipseState& st,
             restart_step = init_config.getRestartStep();
         } else
             OpmLog::warning("Restart case too long - not embedded in SMSPEC file");
-
-        this->prev_time_elapsed =
-            schedule.getTimeMap().getTimePassedUntil(restart_step);
     }
     ecl_sum.reset( ecl_sum_alloc_restart_writer2(basename,
                                                  restart_case,
@@ -1266,12 +1317,13 @@ Summary::Summary( const EclipseState& st,
 
             /* get unit strings by calling each function with dummy input */
             const auto handle = funs_pair->second;
-            const std::vector< const Well* > dummy_wells;
+            const std::vector< Well2 > dummy_wells;
 
             const fn_args no_args { dummy_wells, // Wells from Schedule object
                                     0,           // Duration of time step
                                     0,           // Simulation step
                                     node.num(),
+                                    {},          // SummaryState
                                     {},          // Well results - data::Wells
                                     {},          // Region <-> cell mappings.
                                     this->grid,
@@ -1346,12 +1398,6 @@ Summary::Summary( const EclipseState& st,
             hndlrs.emplace_back(rvec.back().get(), func->second);
         }
     }
-
-    for (const auto& pair : this->handlers->handlers) {
-        const auto * nodeptr = pair.first;
-        if (nodeptr->is_total())
-            this->prev_state.add(*nodeptr, 0);
-    }
 }
 
 /*
@@ -1373,7 +1419,7 @@ Summary::Summary( const EclipseState& st,
 std::vector< std::pair< std::string, double > >
 well_efficiency_factors( const ecl::smspec_node* node,
                          const Schedule& schedule,
-                         const std::vector< const Well* >& schedule_wells,
+                         const std::vector<Well2>& schedule_wells,
                          const int sim_step ) {
     std::vector< std::pair< std::string, double > > efac;
 
@@ -1389,13 +1435,12 @@ well_efficiency_factors( const ecl::smspec_node* node,
     const bool is_rate = !node->is_total();
     const auto &groupTree = schedule.getGroupTree(sim_step);
 
-    for( const auto* well : schedule_wells ) {
-        double eff_factor = well->getEfficiencyFactor(sim_step);
-
-        if ( !well->hasBeenDefined( sim_step ) )
+    for( const auto& well : schedule_wells ) {
+        if (!well.hasBeenDefined(sim_step))
             continue;
 
-        const auto* group_node = &schedule.getGroup(well->getGroupName(sim_step));
+        double eff_factor = well.getEfficiencyFactor();
+        const auto* group_node = &schedule.getGroup(well.groupName());
 
         while(true){
             if((   is_group
@@ -1409,25 +1454,26 @@ well_efficiency_factors( const ecl::smspec_node* node,
                 break;
             group_node = &schedule.getGroup( parent );
         }
-        efac.emplace_back( well->name(), eff_factor );
+        efac.emplace_back( well.name(), eff_factor );
     }
 
     return efac;
 }
 
-void Summary::add_timestep( int report_step,
-                            double secs_elapsed,
-                            const EclipseState& es,
-                            const Schedule& schedule,
-                            const data::Wells& wells ,
-                            const std::map<std::string, double>& single_values,
-                            const std::map<std::string, std::vector<double>>& region_values,
-                            const std::map<std::pair<std::string, int>, double>& block_values) {
+void Summary::eval( SummaryState& st,
+                    int report_step,
+                    double secs_elapsed,
+                    const EclipseState& es,
+                    const Schedule& schedule,
+                    const data::Wells& wells ,
+                    const std::map<std::string, double>& single_values,
+                    const std::map<std::string, std::vector<double>>& region_values,
+                    const std::map<std::pair<std::string, int>, double>& block_values) const {
 
-    if (secs_elapsed < this->prev_time_elapsed) {
+    if (secs_elapsed < st.get_elapsed()) {
         const auto& usys    = es.getUnits();
         const auto  elapsed = usys.from_si(measure::time, secs_elapsed);
-        const auto  prev_el = usys.from_si(measure::time, this->prev_time_elapsed);
+        const auto  prev_el = usys.from_si(measure::time, st.get_elapsed());
         const auto  unt     = '[' + std::string{ usys.name(measure::time) } + ']';
 
         throw std::invalid_argument {
@@ -1439,9 +1485,7 @@ void Summary::add_timestep( int report_step,
         };
     }
 
-    auto* tstep = ecl_sum_add_tstep( this->ecl_sum.get(), report_step, secs_elapsed );
-    const double duration = secs_elapsed - this->prev_time_elapsed;
-    SummaryState st;
+    const double duration = secs_elapsed - st.get_elapsed();
 
     /* report_step is the number of the file we are about to write - i.e. for instance CASE.S$report_step
      * for the data in a non-unified summary file.
@@ -1451,26 +1495,44 @@ void Summary::add_timestep( int report_step,
 
     for( auto& f : this->handlers->handlers ) {
         const int num = smspec_node_get_num( f.first );
+        double unit_applied_val = smspec_node_get_default( f.first );
 
-        const auto schedule_wells = find_wells( schedule, f.first, sim_step, this->regionCache );
-        auto eff_factors = well_efficiency_factors( f.first, schedule, schedule_wells, sim_step );
+        if (need_wells(smspec_node_get_var_type(f.first ),
+                       smspec_node_get_keyword(f.first))) {
 
-        const auto val = f.second( { schedule_wells,
-                                     duration,
-                                     sim_step,
-                                     num,
-                                     wells,
-                                     this->regionCache,
-                                     this->grid,
-                                     eff_factors});
-
-        double unit_applied_val = es.getUnits().from_si( val.unit, val.value );
-        if (smspec_node_is_total(f.first)) {
-            const auto* genkey = smspec_node_get_gen_key1( f.first );
-            unit_applied_val += this->prev_state.get(genkey);
+            const auto schedule_wells = find_wells( schedule, f.first, sim_step, this->regionCache );
+            /*
+              It is not a bug as such if the schedule_wells list comes back
+              empty; it just means that at the current timestep no relevant
+              wells have been defined and we do not calculate a value.
+            */
+            if (schedule_wells.size() > 0) {
+                auto eff_factors = well_efficiency_factors( f.first, schedule, schedule_wells, sim_step );
+                const auto val = f.second( { schedule_wells,
+                                             duration,
+                                             sim_step,
+                                             num,
+                                             st,
+                                             wells,
+                                             this->regionCache,
+                                             this->grid,
+                                             eff_factors});
+                unit_applied_val = es.getUnits().from_si( val.unit, val.value );
+            }
+        } else {
+            const auto val = f.second({ {},
+                                        duration,
+                                        sim_step,
+                                        num,
+                                        st,
+                                        {},
+                                        this->regionCache,
+                                        this->grid,
+                                        {} });
+            unit_applied_val = es.getUnits().from_si( val.unit, val.value );
         }
 
-        st.add(*f.first, unit_applied_val);
+        st.update(*f.first, unit_applied_val);
     }
 
     for( const auto& value_pair : single_values ) {
@@ -1480,7 +1542,7 @@ void Summary::add_timestep( int report_step,
             const auto unit = single_values_units.at( key );
             double si_value = value_pair.second;
             double output_value = es.getUnits().from_si(unit , si_value );
-            st.add(*node_pair->second, output_value);
+            st.update(*node_pair->second, output_value);
         }
     }
 
@@ -1495,7 +1557,7 @@ void Summary::add_timestep( int report_step,
                 assert (smspec_node_get_num( nodeptr ) - 1 == static_cast<int>(reg));
                 double si_value = value_pair.second[reg];
                 double output_value = es.getUnits().from_si(unit , si_value );
-                st.add(*nodeptr, output_value);
+                st.update(*nodeptr, output_value);
             }
         }
     }
@@ -1508,65 +1570,52 @@ void Summary::add_timestep( int report_step,
             const auto unit = block_units.at( key.first );
             double si_value = value_pair.second;
             double output_value = es.getUnits().from_si(unit , si_value );
-            st.add(*nodeptr, output_value);
+            st.update(*nodeptr, output_value);
         }
     }
-
     eval_udq(schedule, sim_step, st);
-    {
-        const ecl_sum_type * ecl_sum = this->ecl_sum.get();
-        const ecl_smspec_type * smspec = ecl_sum_get_smspec(ecl_sum);
-        auto num_nodes = ecl_smspec_num_nodes(smspec);
-        for (int node_index = 0; node_index < num_nodes; node_index++) {
-            const auto& smspec_node = ecl_smspec_iget_node(smspec, node_index);
-            // The TIME node is treated specially, it is created internally in
-            // the ecl_sum instance when the timestep is created - and
-            // furthermore it is not in st SummaryState instance.
-            if (smspec_node.get_params_index() == ecl_smspec_get_time_index(smspec))
-                continue;
-
-            const std::string key = smspec_node.get_gen_key1();
-            if (st.has(key))
-                ecl_sum_tstep_iset(tstep, smspec_node.get_params_index(), st.get(key));
-            /*
-              else
-              OpmLog::warning("Have configured summary variable " + key + " for summary output - but it has not been calculated");
-            */
-        }
-    }
-
-    this->prev_state = st;
-    this->prev_time_elapsed = secs_elapsed;
+    st.update_elapsed(duration);
 }
 
-void Summary::write() {
+
+void Summary::internal_store(const SummaryState& st, int report_step) {
+    auto* tstep = ecl_sum_add_tstep( this->ecl_sum.get(), report_step, st.get_elapsed() );
+    const ecl_smspec_type * smspec = ecl_sum_get_smspec(this->ecl_sum.get());
+    auto num_nodes = ecl_smspec_num_nodes(smspec);
+    for (int node_index = 0; node_index < num_nodes; node_index++) {
+        const auto& smspec_node = ecl_smspec_iget_node(smspec, node_index);
+        // The TIME node is treated specially, it is created internally in
+        // the ecl_sum instance when the timestep is created - and
+        // furthermore it is not in st SummaryState instance.
+        if (smspec_node.get_params_index() == ecl_smspec_get_time_index(smspec))
+            continue;
+
+        const std::string key = smspec_node.get_gen_key1();
+        if (st.has(key))
+            ecl_sum_tstep_iset(tstep, smspec_node.get_params_index(), st.get(key));
+
+        /*
+          else
+          OpmLog::warning("Have configured summary variable " + key + " for summary output - but it has not been calculated");
+        */
+    }
+}
+
+
+void Summary::add_timestep( const SummaryState& st,
+                            int report_step) {
+    this->internal_store(st, report_step);
+}
+
+
+void Summary::write() const {
     ecl_sum_fwrite( this->ecl_sum.get() );
 }
 
+
 Summary::~Summary() {}
 
-const SummaryState& Summary::get_restart_vectors() const
-{
-    return this->prev_state;
-}
 
-void Summary::reset_cumulative_quantities(const SummaryState& rstrt)
-{
-    for (const auto& f : this->handlers->handlers) {
-        if (! smspec_node_is_total(f.first)) {
-            // Ignore quantities that are not cumulative ("total").
-            continue;
-        }
 
-        const auto* genkey = smspec_node_get_gen_key1(f.first);
-        if (rstrt.has(genkey)) {
-            // Assume 'rstrt' uses output units.  This is satisfied if rstrt
-            // is constructed from information in a restart file--i.e., from
-            // the double precision restart vectors 'XGRP' and 'XWEL' during
-            // RestartIO::load().
-            this->prev_state.add(genkey, rstrt.get(genkey));
-        }
-    }
-}
 
 }} // namespace Opm::out

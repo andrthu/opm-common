@@ -31,15 +31,17 @@
 #include <opm/parser/eclipse/EclipseState/EclipseState.hpp>
 #include <opm/parser/eclipse/EclipseState/IOConfig/IOConfig.hpp>
 #include <opm/parser/eclipse/EclipseState/Grid/GridProperty.hpp>
+#include <opm/parser/eclipse/EclipseState/Runspec.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/ScheduleEnums.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Well/Well.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Well/WellConnections.hpp>
 #include <opm/parser/eclipse/Utility/Functional.hpp>
 
 #include <opm/output/eclipse/RestartIO.hpp>
 #include <opm/output/eclipse/Summary.hpp>
-#include <opm/output/eclipse/Tables.hpp>
+#include <opm/output/eclipse/WriteInit.hpp>
+
+#include <opm/io/eclipse/OutputStream.hpp>
 
 #include <cstdlib>
 #include <memory>     // unique_ptr
@@ -50,6 +52,7 @@
 #include <ert/ecl/EclFilename.hpp>
 
 #include <ert/ecl/ecl_kw_magic.h>
+#include <ert/ecl/ecl_kw.h>
 #include <ert/ecl/ecl_init_file.h>
 #include <ert/ecl/ecl_file.h>
 #include <ert/ecl/ecl_grid.h>
@@ -66,35 +69,6 @@
 // namespace start here since we don't want the ERT headers in it
 namespace Opm {
 namespace {
-
-
-
-
-void writeKeyword( ERT::FortIO& fortio ,
-                   const std::string& keywordName,
-                   const std::vector<int> &data ) {
-    ERT::EclKW< int > kw( keywordName, data );
-    kw.fwrite( fortio );
-}
-
-/*
-  This overload hardcodes the common assumption that properties which
-  are stored internally as double values in OPM should be stored as
-  float values in the ECLIPSE formatted binary files.
-*/
-
-void writeKeyword( ERT::FortIO& fortio ,
-                   const std::string& keywordName,
-                   const std::vector<double> &data) {
-
-    ERT::EclKW< float > kw( keywordName, data );
-    kw.fwrite( fortio );
-
-}
-
-
-
-
 
 class RFT {
     public:
@@ -148,14 +122,14 @@ void RFT::writeTimeStep( const Schedule& schedule,
         if (!(rft_config.rft(well_name, report_step) || rft_config.plt(well_name, report_step)))
             continue;
 
-        auto* well = schedule.getWell(well_name);
         rft rft_node(ecl_rft_node_alloc_new( well_name.c_str(), "RFT", current_time, days ));
         const auto& wellData = wellDatas.at(well_name);
 
         if (wellData.connections.empty())
             continue;
 
-        for( const auto& connection : well->getConnections( report_step ) ) {
+        const auto& well = schedule.getWell2(well_name, report_step);
+        for( const auto& connection : well.getConnections() ) {
 
             const size_t i = size_t( connection.getI() );
             const size_t j = size_t( connection.getJ() );
@@ -229,145 +203,17 @@ EclipseIO::Impl::Impl( const EclipseState& eclipseState,
 {}
 
 
-void EclipseIO::Impl::writeINITFile( const data::Solution& simProps, std::map<std::string, std::vector<int> > int_data, const NNC& nnc) const {
-    const auto& units = this->es.getUnits();
-    const IOConfig& ioConfig = this->es.cfg().io();
+void EclipseIO::Impl::writeINITFile(const data::Solution&                   simProps,
+                                    std::map<std::string, std::vector<int>> int_data,
+                                    const NNC&                              nnc) const
+{
+    EclIO::OutputStream::Init initFile {
+        EclIO::OutputStream::ResultSet { this->outputDir, this->baseName },
+        EclIO::OutputStream::Formatted { this->es.cfg().io().getFMTOUT() }
+    };
 
-    std::string  initFile( ERT::EclFilename( this->outputDir,
-                                             this->baseName,
-                                             ECL_INIT_FILE,
-                                             ioConfig.getFMTOUT() ));
-
-    ERT::FortIO fortio( initFile,
-                        std::ios_base::out,
-                        ioConfig.getFMTOUT(),
-                        ECL_ENDIAN_FLIP );
-
-
-    // Write INIT header. Observe that the PORV vector is treated
-    // specially; that is because for this particulat vector we write
-    // a total of nx*ny*nz values, where the PORV vector has been
-    // explicitly set to zero for inactive cells. The convention is
-    // that the active/inactive cell mapping can be inferred by
-    // reading the PORV vector.
-    {
-
-        const auto& opm_data = this->es.get3DProperties().getDoubleGridProperty("PORV").getData();
-        auto ecl_data = opm_data;
-
-        for (size_t global_index = 0; global_index < opm_data.size(); global_index++)
-            if (!this->grid.cellActive( global_index ))
-                ecl_data[global_index] = 0;
-
-
-        ecl_init_file_fwrite_header( fortio.get(),
-                                     this->grid.c_ptr(),
-                                     NULL,
-                                     units.getEclType(),
-                                     this->es.runspec( ).eclPhaseMask( ),
-                                     this->schedule.posixStartTime( ));
-
-        units.from_si( UnitSystem::measure::volume, ecl_data );
-        writeKeyword( fortio, "PORV" , ecl_data );
-    }
-
-    // Writing quantities which are calculated by the grid to the INIT file.
-    ecl_grid_fwrite_depth( this->grid.c_ptr() , fortio.get() , units.getEclType( ) );
-    ecl_grid_fwrite_dims( this->grid.c_ptr() , fortio.get() , units.getEclType( ) );
-
-    // Write properties from the input deck.
-    {
-        const auto& properties = this->es.get3DProperties().getDoubleProperties();
-        using double_kw = std::pair<std::string, UnitSystem::measure>;
-        /*
-          This is a rather arbitrary hardcoded list of 3D keywords
-          which are written to the INIT file, if they are in the
-          current EclipseState.
-        */
-        std::vector<double_kw> doubleKeywords = {{"PORO"  , UnitSystem::measure::identity },
-                                                 {"PERMX" , UnitSystem::measure::permeability },
-                                                 {"PERMY" , UnitSystem::measure::permeability },
-                                                 {"PERMZ" , UnitSystem::measure::permeability },
-                                                 {"NTG"   , UnitSystem::measure::identity }};
-
-        // The INIT file should always contain the NTG property, we
-        // therefor invoke the auto create functionality to ensure
-        // that "NTG" is included in the properties container.
-        properties.assertKeyword("NTG");
-
-        for (const auto& kw_pair : doubleKeywords) {
-            if (properties.hasKeyword( kw_pair.first)) {
-                const auto& opm_property = properties.getKeyword(kw_pair.first);
-                auto ecl_data = opm_property.compressedCopy( this->grid );
-
-                units.from_si( kw_pair.second, ecl_data );
-                writeKeyword( fortio, kw_pair.first, ecl_data );
-            }
-        }
-    }
-
-
-    // Write properties which have been initialized by the simulator.
-    {
-        for (const auto& prop : simProps) {
-            auto ecl_data = this->grid.compressedVector( prop.second.data );
-            writeKeyword( fortio, prop.first, ecl_data );
-        }
-    }
-
-    // Write tables
-    {
-        Tables tables( this->es.getUnits() );
-        tables.addPVTO( this->es.getTableManager().getPvtoTables() );
-        tables.addPVTG( this->es.getTableManager().getPvtgTables() );
-        tables.addPVTW( this->es.getTableManager().getPvtwTable() );
-        tables.addDensity( this->es.getTableManager().getDensityTable( ) );
-        tables.addSatFunc(this->es);
-        fwrite(tables, fortio);
-    }
-
-    // Write all integer field properties from the input deck.
-    {
-        const auto& properties = this->es.get3DProperties().getIntProperties();
-
-        // It seems that the INIT file should always contain these
-        // keywords, we therefor call getKeyword() here to invoke the
-        // autocreation property, and ensure that the keywords exist
-        // in the properties container.
-        properties.assertKeyword("PVTNUM");
-        properties.assertKeyword("SATNUM");
-        properties.assertKeyword("EQLNUM");
-        properties.assertKeyword("FIPNUM");
-
-        for (const auto& property : properties) {
-            auto ecl_data = property.compressedCopy( this->grid );
-            writeKeyword( fortio , property.getKeywordName() , ecl_data );
-        }
-    }
-
-
-    //Write Integer Vector Map
-    {
-        for( const auto& pair : int_data)  {
-            const std::string& key = pair.first;
-            const std::vector<int>& int_vector = pair.second;
-            if (key.size() > ECL_STRING8_LENGTH)
-              throw std::invalid_argument("Keyword is too long.");
-
-            writeKeyword( fortio , key , int_vector );
-        }
-    }
-
-
-    // Write NNC transmissibilities
-    {
-        std::vector<double> tran;
-        for( const NNCdata& nd : nnc.nncdata() )
-            tran.push_back( nd.trans );
-
-        units.from_si( UnitSystem::measure::transmissibility , tran );
-        writeKeyword( fortio, "TRANNNC" , tran );
-    }
+    InitIO::write(this->es, this->grid, this->schedule,
+                  simProps, std::move(int_data), nnc, initFile);
 }
 
 
@@ -398,7 +244,7 @@ void EclipseIO::writeInitial( data::Solution simProps, std::map<std::string, std
 
         simProps.convertFromSI( es.getUnits() );
         if( ioConfig.getWriteINITFile() )
-            this->impl->writeINITFile( simProps , int_data, nnc );
+            this->impl->writeINITFile( simProps , std::move(int_data), nnc );
 
         if( ioConfig.getWriteEGRIDFile( ) )
             this->impl->writeEGRIDFile( nnc );
@@ -407,13 +253,11 @@ void EclipseIO::writeInitial( data::Solution simProps, std::map<std::string, std
 }
 
 // implementation of the writeTimeStep method
-void EclipseIO::writeTimeStep(int report_step,
+void EclipseIO::writeTimeStep(const SummaryState& st,
+                              int report_step,
                               bool  isSubstep,
                               double secs_elapsed,
                               RestartValue value,
-                              const std::map<std::string, double>& single_summary_values,
-                              const std::map<std::string, std::vector<double> >& region_summary_values,
-                              const std::map<std::pair<std::string, int>, double>& block_summary_values,
                               const bool write_double)
  {
 
@@ -435,14 +279,8 @@ void EclipseIO::writeTimeStep(int report_step,
       very intial report_step==0 call, which is only garbage.
     */
     if (report_step > 0) {
-        this->impl->summary.add_timestep( report_step,
-                                          secs_elapsed,
-                                          es,
-                                          schedule,
-                                          value.wells ,
-                                          single_summary_values ,
-                                          region_summary_values,
-                                          block_summary_values);
+        this->impl->summary.add_timestep( st,
+                                          report_step);
         this->impl->summary.write();
     }
 
@@ -453,13 +291,16 @@ void EclipseIO::writeTimeStep(int report_step,
     */
     if(!isSubstep && restart.getWriteRestartFile(report_step))
     {
-        std::string filename = ERT::EclFilename( this->impl->outputDir,
-                                                 this->impl->baseName,
-                                                 ioConfig.getUNIFOUT() ? ECL_UNIFIED_RESTART_FILE : ECL_RESTART_FILE,
-                                                 report_step,
-                                                 ioConfig.getFMTOUT() );
-        RestartIO::save(filename, report_step, secs_elapsed, value, es, grid, schedule,
-                        this->impl->summary.get_restart_vectors(), write_double);
+        EclIO::OutputStream::Restart rstFile {
+            EclIO::OutputStream::ResultSet { this->impl->outputDir,
+                                             this->impl->baseName },
+            report_step,
+            EclIO::OutputStream::Formatted { ioConfig.getFMTOUT() },
+            EclIO::OutputStream::Unified   { ioConfig.getUNIFOUT() }
+        };
+
+        RestartIO::save(rstFile, report_step, secs_elapsed, value, es, grid, schedule,
+                        st, write_double);
     }
 
 
@@ -480,8 +321,7 @@ void EclipseIO::writeTimeStep(int report_step,
  }
 
 
-
-RestartValue EclipseIO::loadRestart(const std::vector<RestartKey>& solution_keys, const std::vector<RestartKey>& extra_keys) const {
+RestartValue EclipseIO::loadRestart(SummaryState& summary_state, const std::vector<RestartKey>& solution_keys, const std::vector<RestartKey>& extra_keys) const {
     const auto& es                       = this->impl->es;
     const auto& grid                     = this->impl->grid;
     const auto& schedule                 = this->impl->schedule;
@@ -492,14 +332,8 @@ RestartValue EclipseIO::loadRestart(const std::vector<RestartKey>& solution_keys
                                                                         report_step,
                                                                         false );
 
-    auto rst = RestartIO::load(filename, report_step, solution_keys,
-                               es, grid, schedule, extra_keys);
-
-    // Technically a violation of 'const'.  Allowed because 'impl' is
-    // constant pointer to mutable Impl.
-    this->impl->summary.reset_cumulative_quantities(rst.second);
-
-    return std::move(rst.first);
+    return RestartIO::load(filename, report_step, summary_state, solution_keys,
+                           es, grid, schedule, extra_keys);
 }
 
 EclipseIO::EclipseIO( const EclipseState& es,
@@ -525,15 +359,11 @@ EclipseIO::EclipseIO( const EclipseState& es,
     }
 }
 
-
-const SummaryState& EclipseIO::summaryState() const {
-    return this->impl->summary.get_restart_vectors();
+const out::Summary& EclipseIO::summary() {
+    return this->impl->summary;
 }
 
 
 EclipseIO::~EclipseIO() {}
 
 } // namespace Opm
-
-
-

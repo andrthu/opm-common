@@ -269,6 +269,8 @@ namespace Opm {
         constexpr const double OilDissolutionFactor = LiquidSurfaceVolume/GasSurfaceVolume;
         constexpr const double Density              = kilogram/cubic(meter);
         constexpr const double PolymerDensity       = kilogram/cubic(meter);
+        constexpr const double FoamDensity          = kilogram/cubic(meter);
+        constexpr const double FoamSurfactantConcentration = kilogram/cubic(meter);
         constexpr const double Salinity             = kilogram/cubic(meter);
         constexpr const double Viscosity            = centi*Poise;
         constexpr const double Timestep             = day;
@@ -296,6 +298,8 @@ namespace Opm {
         constexpr const double OilDissolutionFactor = LiquidSurfaceVolume/GasSurfaceVolume;
         constexpr const double Density              = pound/cubic(feet);
         constexpr const double PolymerDensity       = pound/stb;
+        constexpr const double FoamDensity          = pound/GasSurfaceVolume;
+        constexpr const double FoamSurfactantConcentration = pound/stb;
         constexpr const double Salinity             = pound/stb;
         constexpr const double Viscosity            = centi*Poise;
         constexpr const double Timestep             = day;
@@ -323,6 +327,8 @@ namespace Opm {
         constexpr const double OilDissolutionFactor = LiquidSurfaceVolume/GasSurfaceVolume;
         constexpr const double Density              = gram/cubic(centi*meter);
         constexpr const double PolymerDensity       = gram/cubic(centi*meter);
+        constexpr const double FoamDensity          = gram/cubic(centi*meter);
+        constexpr const double FoamSurfactantConcentration = gram/cubic(centi*meter);
         constexpr const double Salinity             = gram/cubic(centi*meter);
         constexpr const double Viscosity            = centi*Poise;
         constexpr const double Timestep             = hour;
@@ -350,6 +356,8 @@ namespace Opm {
         constexpr const double OilDissolutionFactor = LiquidSurfaceVolume/GasSurfaceVolume;
         constexpr const double Density              = kilogram/cubic(meter);
         constexpr const double PolymerDensity       = kilogram/cubic(meter);
+        constexpr const double FoamDensity          = kilogram/cubic(meter);
+        constexpr const double FoamSurfactantConcentration = kilogram/cubic(meter);
         constexpr const double Salinity             = kilogram/cubic(meter);
         constexpr const double Viscosity            = centi*Poise;
         constexpr const double Timestep             = day;

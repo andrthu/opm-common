@@ -38,7 +38,6 @@ namespace {
 
 constexpr ParserItem::itype INT = ParserItem::itype::INT;
 constexpr ParserItem::itype STRING= ParserItem::itype::STRING;
-constexpr ParserItem::itype RAW_STRING = ParserItem::itype::RAW_STRING;
 constexpr ParserItem::itype DOUBLE = ParserItem::itype::DOUBLE;
 
 
@@ -959,9 +958,6 @@ BOOST_AUTO_TEST_CASE(ParserDoubleItemGetDimension) {
     BOOST_CHECK_EQUAL( "Length*Length*Length" , doubleItem.getDimension(2));
     BOOST_CHECK_THROW( doubleItem.getDimension( 3 ) , std::out_of_range );
 }
-
-const static auto SINGLE = ParserItem::item_size::SINGLE;
-const static auto ALL = ParserItem::item_size::ALL;
 
 BOOST_AUTO_TEST_CASE(DefaultConstructor_NoParams_NoThrow) {
     BOOST_CHECK_NO_THROW(ParserRecord record);
@@ -1978,6 +1974,25 @@ DENSITY
 
     BOOST_CHECK( rs.defaultApplied( 0 ) );
     BOOST_CHECK( pbub.defaultApplied( 0 ) );
+}
+
+BOOST_AUTO_TEST_CASE(IGNORE_SOH) {
+    // Check that parsing RSCONSTT does not bleed into next keyword.
+
+    const auto deck_string = std::string { R"(
+FIELD
+TABDIMS
+  1* 2
+/
+-- The ^A should be here - that is ASCII character 1 which is sometimes
+-- inserted by the windows editor Notepad++
+PROPS
+RSCONSTT
+  0.35  932 /
+  0.40  945 /
+)" };
+
+    const auto deck = Parser{}.parseString( deck_string );
 }
 
 

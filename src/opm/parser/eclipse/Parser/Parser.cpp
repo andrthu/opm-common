@@ -298,17 +298,17 @@ void ParserState::closeFile() {
     this->input_stack.pop();
 }
 
-ParserState::ParserState(const ParseContext& __parseContext, ErrorGuard& errors) :
+ParserState::ParserState(const ParseContext& __parseContext, ErrorGuard& errors_arg) :
     parseContext( __parseContext ),
-    errors( errors )
+    errors( errors_arg )
 {}
 
 ParserState::ParserState( const ParseContext& context,
-                          ErrorGuard& errors,
+                          ErrorGuard& errors_arg,
                           boost::filesystem::path p ) :
     rootPath( boost::filesystem::canonical( p ).parent_path() ),
     parseContext( context ),
-    errors( errors )
+    errors( errors_arg )
 {
     openRootFile( p );
 }
@@ -322,7 +322,7 @@ void ParserState::loadFile(const boost::filesystem::path& inputFile) {
     boost::filesystem::path inputFileCanonical;
     try {
         inputFileCanonical = boost::filesystem::canonical(inputFile);
-    } catch (boost::filesystem::filesystem_error fs_error) {
+    } catch (const boost::filesystem::filesystem_error& fs_error) {
         std::string msg = "Could not open file: " + inputFile.string();
         parseContext.handleError( ParseContext::PARSE_MISSING_INCLUDE , msg, errors);
         return;

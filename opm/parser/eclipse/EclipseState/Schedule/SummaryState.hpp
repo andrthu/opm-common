@@ -24,6 +24,7 @@
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
+#include <iosfwd>
 
 #include <ert/ecl/smspec_node.hpp>
 
@@ -66,26 +67,52 @@ class SummaryState {
 public:
     typedef std::unordered_map<std::string, double>::const_iterator const_iterator;
 
-    double get(const std::string&) const;
-    bool has(const std::string& key) const;
-    void add(const std::string& key, double value);
-    void add(const ecl::smspec_node& node, double value);
+    /*
+      The set() function has to be retained temporarily to support updating of
+      cumulatives from restart files.
+    */
+    void set(const std::string& key, double value);
 
-    void add_well_var(const std::string& well, const std::string& var, double value);
+    bool has(const std::string& key) const;
     bool has_well_var(const std::string& well, const std::string& var) const;
+    bool has_group_var(const std::string& group, const std::string& var) const;
+
+    void update(const std::string& key, double value);
+    void update(const ecl::smspec_node& node, double value);
+    void update_well_var(const std::string& well, const std::string& var, double value);
+    void update_group_var(const std::string& group, const std::string& var, double value);
+    void update_elapsed(double delta);
+
+    double get(const std::string&) const;
+    double get_elapsed() const;
     double get_well_var(const std::string& well, const std::string& var) const;
+    double get_group_var(const std::string& group, const std::string& var) const;
 
     std::vector<std::string> wells() const;
     std::vector<std::string> wells(const std::string& var) const;
+    std::vector<std::string> groups() const;
+    std::vector<std::string> groups(const std::string& var) const;
+    std::vector<char> serialize() const;
+    void deserialize(const std::vector<char>& buffer);
     const_iterator begin() const;
     const_iterator end() const;
+    std::size_t num_wells() const;
+    std::size_t size() const;
 private:
+    double elapsed = 0;
     std::unordered_map<std::string,double> values;
 
     // The first key is the variable and the second key is the well.
     std::unordered_map<std::string, std::unordered_map<std::string, double>> well_values;
     std::unordered_set<std::string> m_wells;
+
+    // The first key is the variable and the second key is the group.
+    std::unordered_map<std::string, std::unordered_map<std::string, double>> group_values;
+    std::unordered_set<std::string> m_groups;
 };
+
+
+std::ostream& operator<<(std::ostream& stream, const SummaryState& st);
 
 }
 #endif
