@@ -72,34 +72,27 @@ BOOST_AUTO_TEST_CASE(CreateGroup_SetInjectorProducer_CorrectStatusSet) {
     Opm::Group group1("IGROUP" , 1, timeMap , 0);
     Opm::Group group2("PGROUP" , 2, timeMap , 0);
 
-    group1.setProductionGroup(0, true);
+    group1.setProductionGroup(0);
     BOOST_CHECK(group1.isProductionGroup(1));
     BOOST_CHECK(!group1.isInjectionGroup(1));
-    group1.setProductionGroup(3, false);
-    BOOST_CHECK(!group1.isProductionGroup(3));
-    BOOST_CHECK(!group1.isInjectionGroup(3));
 
-    group2.setProductionGroup(0, false);
+    group2.setInjectionGroup(0);
     BOOST_CHECK(!group2.isProductionGroup(1));
-    BOOST_CHECK(!group2.isInjectionGroup(1));
-    group2.setProductionGroup(3, true);
+    BOOST_CHECK(group2.isInjectionGroup(1));
+
+    group2.setProductionGroup(3);
     BOOST_CHECK(group2.isProductionGroup(4));
-    BOOST_CHECK(!group2.isInjectionGroup(4));
-    group2.setInjectionGroup(4, true);
-    BOOST_CHECK(group2.isProductionGroup(5));
+
+    group2.setInjectionGroup(4);
     BOOST_CHECK(group2.isInjectionGroup(5));
 
+
+    // Testing that a group can be both; that seems slightly dubious - but was the old behavior
+    group2.setProductionGroup(4);
+    BOOST_CHECK(group2.isProductionGroup(5));
+    BOOST_CHECK(group2.isInjectionGroup(5));
 }
 
-
-BOOST_AUTO_TEST_CASE(InjectRateOK) {
-    auto timeMap = createXDaysTimeMap(10);
-    Opm::Group group("G1" , 1, timeMap , 0);
-    BOOST_CHECK_EQUAL( 0 , group.getInjectionRate( 0 ));
-    group.setInjectionRate( 2 , 100 );
-    BOOST_CHECK_EQUAL( 100 , group.getInjectionRate( 2 ));
-    BOOST_CHECK_EQUAL( 100 , group.getInjectionRate( 8 ));
-}
 
 
 BOOST_AUTO_TEST_CASE(ControlModeOK) {
@@ -287,6 +280,10 @@ BOOST_AUTO_TEST_CASE(createDeckWithGEFAC) {
     Eclipse3DProperties eclipseProperties ( deck , table, grid);
     Runspec runspec (deck );
     Opm::Schedule schedule(deck,  grid, eclipseProperties, runspec);
+
+    auto group_names = schedule.groupNames("PRODUC");
+    BOOST_CHECK_EQUAL(group_names.size(), 1);
+    BOOST_CHECK_EQUAL(group_names[0], "PRODUC");
 
     const auto& group1 = schedule.getGroup("PRODUC");
     BOOST_CHECK_EQUAL(group1.getGroupEfficiencyFactor(0), 0.85);

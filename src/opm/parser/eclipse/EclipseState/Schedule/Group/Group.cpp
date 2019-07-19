@@ -40,7 +40,6 @@ namespace Opm {
     GroupInjection::InjectionData::InjectionData(const TimeMap& timeMap) :
         phase( timeMap, Phase::WATER  ),
         controlMode( timeMap, NONE  ),
-        rate( timeMap, 0  ),
         surfaceFlowMaxRate( timeMap, 0 ),
         reservoirFlowMaxRate( timeMap, 0 ),
         targetReinjectFraction( timeMap, 0 ),
@@ -56,8 +55,7 @@ namespace Opm {
         m_injection( timeMap ),
         m_production( timeMap ),
         m_wells( timeMap, {} ),
-        m_isProductionGroup( timeMap, false),
-        m_isInjectionGroup( timeMap, false),
+        group_type(timeMap, GroupType::NONE),
         m_efficiencyFactor( timeMap, 1.0),
         m_transferEfficiencyFactor( timeMap, 1),
         m_groupNetVFPTable( timeMap, 0 )
@@ -79,20 +77,30 @@ namespace Opm {
             return true;
     }
 
+
+    bool Group::hasType(size_t timeStep, GroupType gtype) const {
+        return ((this->group_type.get(timeStep) & gtype) == gtype);
+    }
+
+    void Group::addType(size_t timeStep, GroupType new_gtype) {
+        auto gt = this->group_type.get(timeStep);
+        this->group_type.update(timeStep, gt | new_gtype );
+    }
+
     bool Group::isProductionGroup(size_t timeStep) const {
-        return bool( m_isProductionGroup.get(timeStep) );
+        return this->hasType(timeStep, GroupType::PRODUCTION);
     }
 
     bool Group::isInjectionGroup(size_t timeStep) const {
-        return bool( m_isInjectionGroup.get(timeStep) );
+        return this->hasType(timeStep, GroupType::INJECTION);
     }
 
-    void Group::setProductionGroup(size_t timeStep, bool isProductionGroup_) {
-        m_isProductionGroup.update(timeStep, isProductionGroup_);
+    void Group::setProductionGroup(size_t timeStep) {
+        this->addType(timeStep, GroupType::PRODUCTION);
     }
 
-    void Group::setInjectionGroup(size_t timeStep, bool isInjectionGroup_) {
-        m_isInjectionGroup.update(timeStep, isInjectionGroup_);
+    void Group::setInjectionGroup(size_t timeStep) {
+        this->addType(timeStep, GroupType::INJECTION);
     }
 
 
@@ -123,14 +131,6 @@ namespace Opm {
 
     Phase Group::getInjectionPhase( size_t time_step ) const {
         return m_injection.phase.get( time_step );
-    }
-
-    void Group::setInjectionRate( size_t time_step , double rate) {
-        m_injection.rate.update( time_step , rate);
-    }
-
-    double Group::getInjectionRate( size_t time_step ) const {
-        return m_injection.rate.get( time_step );
     }
 
     void Group::setInjectionControlMode(size_t time_step , GroupInjection::ControlEnum controlMode) {
