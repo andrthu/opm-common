@@ -39,6 +39,7 @@
 
 #include <opm/parser/eclipse/EclipseState/EclipseState.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Action/ActionX.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Action/ActionResult.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/DynamicState.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/DynamicVector.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Events.hpp>
@@ -75,6 +76,30 @@ namespace {
         return (fnmatch(pattern.c_str(), name.c_str(), flags) == 0);
     }
 
+
+    /*
+      The function trim_wgname() is used to trim the leading and trailing spaces
+      away from the group and well arguments given in the WELSPECS and GRUPTREE
+      keywords. If the deck argument contains a leading or trailing space that is
+      treated as an input error, and the action taken is regulated by the setting
+      ParseContext::PARSE_WGNAME_SPACE.
+
+      Observe that the spaces are trimmed *unconditionally* - i.e. if the
+      ParseContext::PARSE_WGNAME_SPACE setting is set to InputError::IGNORE that
+      means that we do not inform the user about "our fix", but it is *not* possible
+      to configure the parser to leave the spaces intact.
+    */
+
+    std::string trim_wgname(const DeckKeyword& keyword, const std::string& wgname_arg, const ParseContext& parseContext, ErrorGuard errors) {
+        std::string wgname = boost::algorithm::trim_copy(wgname_arg);
+        if (wgname != wgname_arg)  {
+            std::string msg = "Illegal space: \"" + wgname_arg + "\" found when defining WELL/GROUP in keyword: " + keyword.name() + " at " + keyword.getFileName() + ":" + std::to_string(keyword.getLineNumber());
+            parseContext.handleError(ParseContext::PARSE_WGNAME_SPACE, msg, errors);
+        }
+        return wgname;
+    }
+
+
 }
 
     Schedule::Schedule( const Deck& deck,
@@ -84,7 +109,6 @@ namespace {
                         const ParseContext& parseContext,
                         ErrorGuard& errors) :
         m_timeMap( deck ),
-        m_rootGroupTree( this->m_timeMap, GroupTree{} ),
         m_oilvaporizationproperties( this->m_timeMap, OilVaporizationProperties(runspec.tabdims().getNumPVTTables()) ),
         m_events( this->m_timeMap ),
         m_modifierDeck( this->m_timeMap, Deck{} ),
@@ -97,7 +121,7 @@ namespace {
         global_whistctl_mode(this->m_timeMap, WellProducer::CMODE_UNDEFINED),
         rft_config(this->m_timeMap)
     {
-        addGroup( "FIELD", 0 );
+        addGroup( "FIELD", 0, deck.getActiveUnitSystem());
 
         /*
           We can have the MESSAGES keyword anywhere in the deck, we
@@ -115,9 +139,6 @@ namespace {
 
         if (Section::hasSCHEDULE(deck))
             iterateScheduleSection( parseContext, errors, SCHEDULESection( deck ), grid, eclipseProperties );
-#ifdef WELL_TEST
-        checkWells(parseContext, errors);
-#endif
     }
 
 
@@ -232,7 +253,7 @@ namespace {
             handleWLIST( keyword, currentStep );
 
         else if (keyword.name() == "WELSPECS")
-            handleWELSPECS( section, keywordIdx, currentStep, unit_system);
+            handleWELSPECS( section, keywordIdx, currentStep, unit_system, parseContext, errors);
 
         else if (keyword.name() == "WHISTCTL")
             handleWHISTCTL(keyword, currentStep, parseContext, errors);
@@ -295,13 +316,13 @@ namespace {
             handleWELTARG(section, keyword, currentStep, parseContext, errors);
 
         else if (keyword.name() == "GRUPTREE")
-            handleGRUPTREE(keyword, currentStep);
+            handleGRUPTREE(keyword, currentStep, unit_system, parseContext, errors);
 
         else if (keyword.name() == "GRUPNET")
-            handleGRUPNET(keyword, currentStep);
+            handleGRUPNET(keyword, currentStep, unit_system);
 
         else if (keyword.name() == "GCONINJE")
-            handleGCONINJE(section, keyword, currentStep, parseContext, errors);
+            handleGCONINJE(keyword, currentStep, parseContext, errors);
 
         else if (keyword.name() == "GCONPROD")
             handleGCONPROD(keyword, currentStep, parseContext, errors);
@@ -380,7 +401,7 @@ namespace {
         while (true) {
             const auto& keyword = section.getKeyword(keywordIdx);
             if (keyword.name() == "ACTIONX") {
-                ActionX action(keyword, this->m_timeMap.getStartTime(currentStep + 1));
+                Action::ActionX action(keyword, this->m_timeMap.getStartTime(currentStep + 1));
                 while (true) {
                     keywordIdx++;
                     if (keywordIdx == section.size())
@@ -390,7 +411,7 @@ namespace {
                     if (action_keyword.name() == "ENDACTIO")
                         break;
 
-                    if (ActionX::valid_keyword(action_keyword.name()))
+                    if (Action::ActionX::valid_keyword(action_keyword.name()))
                         action.addKeyword(action_keyword);
                     else {
                         std::string msg = "The keyword " + action_keyword.name() + " is not supported in a ACTIONX block.";
@@ -426,13 +447,6 @@ namespace {
     {
     }
 
-
-    bool Schedule::handleGroupFromWELSPECS(const std::string& groupName, GroupTree& newTree) const {
-        if( newTree.exists( groupName ) ) return false;
-
-        newTree.update( groupName );
-        return true;
-    }
 
 
     void Schedule::handleWHISTCTL(const DeckKeyword& keyword, std::size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors) {
@@ -538,10 +552,9 @@ namespace {
     void Schedule::handleWELSPECS( const SCHEDULESection& section,
                                    size_t index,
                                    size_t currentStep,
-                                   const UnitSystem& unit_system) {
-        bool needNewTree = false;
-        auto newTree = m_rootGroupTree.get(currentStep);
-
+                                   const UnitSystem& unit_system,
+                                   const ParseContext& parseContext,
+                                   ErrorGuard& errors) {
         const auto COMPORD_in_timestep = [&]() -> const DeckKeyword* {
             auto itr = section.begin() + index;
             for( ; itr != section.end(); ++itr ) {
@@ -557,11 +570,11 @@ namespace {
 
         for (size_t recordNr = 0; recordNr < keyword.size(); recordNr++) {
             const auto& record = keyword.getRecord(recordNr);
-            const std::string& wellName = record.getItem("WELL").getTrimmedString(0);
-            const std::string& groupName = record.getItem("GROUP").getTrimmedString(0);
+            const std::string& wellName = trim_wgname(keyword, record.getItem("WELL").get<std::string>(0), parseContext, errors);
+            const std::string& groupName = trim_wgname(keyword, record.getItem("GROUP").get<std::string>(0), parseContext, errors);
 
             if (!hasGroup(groupName))
-                addGroup(groupName , currentStep);
+                addGroup(groupName , currentStep, unit_system);
 
             if (!hasWell(wellName)) {
                 WellCompletion::CompletionOrderEnum wellConnectionOrder = WellCompletion::TRACK;
@@ -580,7 +593,7 @@ namespace {
                     }
                 }
                 this->addWell(wellName, record, currentStep, wellConnectionOrder, unit_system);
-                this->addWellToGroup(this->m_groups.at( groupName ), wellName, currentStep);
+                this->addWellToGroup(groupName, wellName, currentStep);
             } else {
                 const auto headI = record.getItem( "HEAD_I" ).get< int >( 0 ) - 1;
                 const auto headJ = record.getItem( "HEAD_J" ).get< int >( 0 ) - 1;
@@ -596,15 +609,6 @@ namespace {
                     update |= well2->updateRefDepth(refDepth);
                     update |= well2->updateDrainageRadius(drainageRadius);
 
-                    if (well2->groupName() != groupName) {
-                        auto& old_group = this->m_groups.at(well2->groupName());
-                        auto& new_group = this->m_groups.at(groupName);
-
-                        old_group.delWell(currentStep, well2->name());
-                        new_group.addWell(currentStep, well2->name());
-                        update = true;
-                    }
-
                     if (update) {
                         this->updateWell(well2, currentStep);
                         this->addWellEvent(well2->name(), ScheduleEvents::WELL_WELSPECS_UPDATE, currentStep);
@@ -612,13 +616,7 @@ namespace {
                 }
             }
 
-            if (handleGroupFromWELSPECS(groupName, newTree))
-                needNewTree = true;
-        }
-
-        if (needNewTree) {
-            m_rootGroupTree.update(currentStep, newTree);
-            m_events.addEvent( ScheduleEvents::GROUP_CHANGE , currentStep);
+            this->addWellToGroup(groupName, wellName, currentStep);
         }
     }
 
@@ -1309,6 +1307,14 @@ namespace {
             const auto& status_str = record.getItem( "STATUS" ).getTrimmedString( 0 );
             const auto well_names = this->wellNames(wellNamePattern, currentStep, matching_wells);
 
+            printf("Running WELOPEN: matching_wells:");
+            for (const auto& w : matching_wells)
+              printf("%s ", w.c_str());
+            printf(" -> ");
+            for (const auto& w : well_names)
+              printf("%s ", w.c_str());
+            printf("\n");
+
             if (well_names.empty())
                 invalidNamePattern( wellNamePattern, parseContext, errors, keyword);
 
@@ -1409,7 +1415,7 @@ namespace {
         }
     }
 
-    void Schedule::handleGCONINJE( const SCHEDULESection& section,  const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors) {
+    void Schedule::handleGCONINJE( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors) {
         for( const auto& record : keyword ) {
             const std::string& groupNamePattern = record.getItem("GROUP").getTrimmedString(0);
             const auto group_names = this->groupNames(groupNamePattern);
@@ -1418,28 +1424,40 @@ namespace {
                 invalidNamePattern(groupNamePattern, parseContext, errors, keyword);
 
             for (const auto& group_name : group_names){
-                auto& group = this->getGroup(group_name);
+                GroupInjection::ControlEnum controlMode = GroupInjection::ControlEnumFromString( record.getItem("CONTROL_MODE").getTrimmedString(0) );
+                Phase phase = get_phase( record.getItem("PHASE").getTrimmedString(0));
+                auto surfaceInjectionRate = record.getItem("SURFACE_TARGET").get< UDAValue >(0);
+                auto reservoirInjectionRate = record.getItem("RESV_TARGET").get<UDAValue>(0);
+                auto reinj_target = record.getItem("REINJ_TARGET").get<UDAValue>(0);
+                auto voidage_target = record.getItem("VOIDAGE_TARGET").get<UDAValue>(0);
+
+                //surfaceInjectionRate = injection::rateToSI(surfaceInjectionRate, phase, section.unitSystem());
                 {
-                    Phase phase = get_phase( record.getItem("PHASE").getTrimmedString(0) );
-                    group.setInjectionPhase( currentStep , phase );
+                    auto group_ptr = std::make_shared<Group2>(this->getGroup2(group_name, currentStep));
+                    Group2::GroupInjectionProperties injection;
+                    injection.phase = phase;
+                    injection.cmode = controlMode;
+                    injection.surface_max_rate = surfaceInjectionRate;
+                    injection.resv_max_rate = reservoirInjectionRate;
+                    injection.target_reinj_fraction = reinj_target;
+                    injection.target_void_fraction = voidage_target;
+                    injection.injection_controls = 0;
+
+                    if (!record.getItem("SURFACE_TARGET").defaultApplied(0))
+                        injection.injection_controls += GroupInjection::RATE;
+
+                    if (!record.getItem("RESV_TARGET").defaultApplied(0))
+                        injection.injection_controls += GroupInjection::RESV;
+
+                    if (!record.getItem("REINJ_TARGET").defaultApplied(0))
+                        injection.injection_controls += GroupInjection::REIN;
+
+                    if (!record.getItem("VOIDAGE_TARGET").defaultApplied(0))
+                        injection.injection_controls += GroupInjection::VREP;
+
+                    if (group_ptr->updateInjection(injection))
+                        this->updateGroup(std::move(group_ptr), currentStep);
                 }
-                {
-                    GroupInjection::ControlEnum controlMode = GroupInjection::ControlEnumFromString( record.getItem("CONTROL_MODE").getTrimmedString(0) );
-                    group.setInjectionControlMode( currentStep , controlMode );
-                }
-
-                Phase wellPhase = get_phase( record.getItem("PHASE").getTrimmedString(0));
-
-                double surfaceInjectionRate = record.getItem("SURFACE_TARGET").get< UDAValue >(0).get<double>();
-                surfaceInjectionRate = injection::rateToSI(surfaceInjectionRate, wellPhase, section.unitSystem());
-                double reservoirInjectionRate = record.getItem("RESV_TARGET").get<UDAValue>(0).get<double>();
-
-                group.setSurfaceMaxRate( currentStep , surfaceInjectionRate);
-                group.setReservoirMaxRate( currentStep , reservoirInjectionRate);
-                group.setTargetReinjectFraction( currentStep , record.getItem("REINJ_TARGET").get<UDAValue>(0).get<double>());
-                group.setTargetVoidReplacementFraction( currentStep , record.getItem("VOIDAGE_TARGET").get<UDAValue>(0).get<double>());
-
-                group.setInjectionGroup(currentStep);
             }
         }
     }
@@ -1453,22 +1471,44 @@ namespace {
                 invalidNamePattern(groupNamePattern, parseContext, errors, keyword);
 
             for (const auto& group_name : group_names){
-                auto& group = this->getGroup(group_name);
-                {
-                    GroupProduction::ControlEnum controlMode = GroupProduction::ControlEnumFromString( record.getItem("CONTROL_MODE").getTrimmedString(0) );
-                    group.setProductionControlMode( currentStep , controlMode );
-                }
-                group.setOilTargetRate( currentStep , record.getItem("OIL_TARGET").get<UDAValue>(0).get<double>());
-                group.setGasTargetRate( currentStep , record.getItem("GAS_TARGET").get<UDAValue>(0).get<double>());
-                group.setWaterTargetRate( currentStep , record.getItem("WATER_TARGET").get<UDAValue>(0).get<double>());
-                group.setLiquidTargetRate( currentStep , record.getItem("LIQUID_TARGET").get<UDAValue>(0).get<double>());
-                group.setReservoirVolumeTargetRate( currentStep , record.getItem("RESERVOIR_FLUID_TARGET").getSIDouble(0));
-                {
-                    GroupProductionExceedLimit::ActionEnum exceedAction = GroupProductionExceedLimit::ActionEnumFromString(record.getItem("EXCEED_PROC").getTrimmedString(0) );
-                    group.setProductionExceedLimitAction( currentStep , exceedAction );
-                }
+                GroupProduction::ControlEnum controlMode = GroupProduction::ControlEnumFromString( record.getItem("CONTROL_MODE").getTrimmedString(0) );
+                GroupProductionExceedLimit::ActionEnum exceedAction = GroupProductionExceedLimit::ActionEnumFromString(record.getItem("EXCEED_PROC").getTrimmedString(0) );
+                auto oil_target = record.getItem("OIL_TARGET").get<UDAValue>(0);
+                auto gas_target = record.getItem("GAS_TARGET").get<UDAValue>(0);
+                auto water_target = record.getItem("WATER_TARGET").get<UDAValue>(0);
+                auto liquid_target = record.getItem("LIQUID_TARGET").get<UDAValue>(0);
+                auto resv_target = record.getItem("RESERVOIR_FLUID_TARGET").getSIDouble(0);
 
-                group.setProductionGroup(currentStep);
+                {
+                    auto group_ptr = std::make_shared<Group2>(this->getGroup2(group_name, currentStep));
+                    Group2::GroupProductionProperties production;
+                    production.cmode = controlMode;
+                    production.oil_target = oil_target;
+                    production.gas_target = gas_target;
+                    production.water_target = water_target;
+                    production.liquid_target = liquid_target;
+                    production.resv_target = resv_target;
+                    production.exceed_action = exceedAction;
+                    production.production_controls = 0;
+
+                    if (!record.getItem("OIL_TARGET").defaultApplied(0))
+                        production.production_controls += GroupProduction::ORAT;
+
+                    if (!record.getItem("GAS_TARGET").defaultApplied(0))
+                        production.production_controls += GroupProduction::GRAT;
+
+                    if (!record.getItem("WATER_TARGET").defaultApplied(0))
+                        production.production_controls += GroupProduction::WRAT;
+
+                    if (!record.getItem("LIQUID_TARGET").defaultApplied(0))
+                        production.production_controls += GroupProduction::LRAT;
+
+                    if (!record.getItem("RESERVOIR_FLUID_TARGET").defaultApplied(0))
+                        production.production_controls += GroupProduction::RESV;
+
+                    if (group_ptr->updateProduction(production))
+                        this->updateGroup(std::move(group_ptr), currentStep);
+                }
             }
         }
     }
@@ -1483,12 +1523,13 @@ namespace {
                 invalidNamePattern(groupNamePattern, parseContext, errors, keyword);
 
             for (const auto& group_name : group_names){
-                auto& group = this->getGroup(group_name);
-                const std::string& transfer_str = record.getItem("TRANSFER_EXT_NET").getTrimmedString(0);
-                bool transfer = (transfer_str == "YES") ? true : false;
-
-                group.setGroupEfficiencyFactor(currentStep, record.getItem("EFFICIENCY_FACTOR").get< double >(0));
-                group.setTransferGroupEfficiencyFactor(currentStep, transfer);
+                bool transfer = DeckItem::to_bool(record.getItem("TRANSFER_EXT_NET").getTrimmedString(0));
+                auto gefac = record.getItem("EFFICIENCY_FACTOR").get< double >(0);
+                {
+                    auto group_ptr = std::make_shared<Group2>(this->getGroup2(group_name, currentStep));
+                    if (group_ptr->update_gefac(gefac, transfer))
+                        this->updateGroup(std::move(group_ptr), currentStep);
+                }
             }
         }
     }
@@ -1697,6 +1738,8 @@ namespace {
                         OpmLog::note(msg);
                     }
 
+                    if (well2->updateConnections(connections))
+                        this->updateWell(well2, currentStep);
                 }
                 this->addWellEvent(name, ScheduleEvents::COMPLETION_CHANGE, currentStep);
             }
@@ -1753,34 +1796,35 @@ namespace {
         }
     }
 
-    void Schedule::handleGRUPTREE( const DeckKeyword& keyword, size_t currentStep) {
-        const auto& currentTree = m_rootGroupTree.get(currentStep);
-        auto newTree = currentTree;
+void Schedule::handleGRUPTREE( const DeckKeyword& keyword, size_t currentStep, const UnitSystem& unit_system, const ParseContext& parseContext, ErrorGuard& errors) {
         for( const auto& record : keyword ) {
-            const std::string& childName = record.getItem("CHILD_GROUP").getTrimmedString(0);
-            const std::string& parentName = record.getItem("PARENT_GROUP").getTrimmedString(0);
-            newTree.update(childName, parentName);
-            newTree.updateSeqIndex(childName, parentName);
+            const std::string& childName = trim_wgname(keyword, record.getItem("CHILD_GROUP").get<std::string>(0), parseContext, errors);
+            const std::string& parentName = trim_wgname(keyword, record.getItem("PARENT_GROUP").get<std::string>(0), parseContext, errors);
 
             if (!hasGroup(parentName))
-                addGroup( parentName , currentStep );
+                addGroup( parentName , currentStep, unit_system );
 
             if (!hasGroup(childName))
-                addGroup( childName , currentStep );
+                addGroup( childName , currentStep, unit_system );
+
+            this->addGroupToGroup(parentName, childName, currentStep);
         }
-        m_rootGroupTree.update(currentStep, newTree);
     }
 
-    void Schedule::handleGRUPNET( const DeckKeyword& keyword, size_t currentStep) {
+
+    void Schedule::handleGRUPNET( const DeckKeyword& keyword, size_t currentStep, const UnitSystem& unit_system) {
         for( const auto& record : keyword ) {
             const auto& groupName = record.getItem("NAME").getTrimmedString(0);
 
             if (!hasGroup(groupName))
-                addGroup(groupName , currentStep);
+                addGroup(groupName , currentStep, unit_system);
 
-            auto& group = this->m_groups.at( groupName );
             int table = record.getItem("VFP_TABLE").get< int >(0);
-            group.setGroupNetVFPTable(currentStep, table);
+            {
+                auto group_ptr = std::make_shared<Group2>( this->getGroup2(groupName, currentStep) );
+                if (group_ptr->updateNetVFPTable(table))
+                    this->updateGroup(std::move(group_ptr), currentStep);
+            }
         }
     }
 
@@ -1831,8 +1875,31 @@ namespace {
         return this->m_timeMap;
     }
 
-    const GroupTree& Schedule::getGroupTree(size_t timeStep) const {
-        return m_rootGroupTree.get(timeStep);
+
+    GTNode Schedule::groupTree(const std::string& root_node, std::size_t report_step, const GTNode * parent) const {
+        auto root_group = this->getGroup2(root_node, report_step);
+        GTNode tree(root_group, parent);
+
+        for (const auto& wname : root_group.wells()) {
+            const auto& well = this->getWell2(wname, report_step);
+            tree.add_well(well);
+        }
+
+        for (const auto& gname : root_group.groups()) {
+            auto child_group = this->groupTree(gname, report_step, std::addressof(tree));
+            tree.add_group(child_group);
+        }
+
+        return tree;
+    }
+
+    GTNode Schedule::groupTree(const std::string& root_node, std::size_t report_step) const {
+        return this->groupTree(root_node, report_step, nullptr);
+    }
+
+
+    GTNode Schedule::groupTree(std::size_t report_step) const {
+        return this->groupTree("FIELD", report_step);
     }
 
     void Schedule::addWell(const std::string& wellName,
@@ -1927,50 +1994,47 @@ namespace {
         return well.hasBeenDefined(timeStep);
     }
 
-    std::vector< Well2 > Schedule::getChildWells2(const std::string& group_name, size_t timeStep, GroupWellQueryMode query_mode) const {
+    std::vector< const Group2* > Schedule::getChildGroups2(const std::string& group_name, size_t timeStep) const {
         if (!hasGroup(group_name))
-            throw std::invalid_argument("No such group: " + group_name);
+            throw std::invalid_argument("No such group: '" + group_name + "'");
         {
-            const auto& group = getGroup( group_name );
-            std::vector<Well2> wells;
+            const auto& group = getGroup2( group_name, timeStep );
+            std::vector<const Group2*> child_groups;
 
-            if (group.hasBeenDefined( timeStep )) {
-                const GroupTree& group_tree = getGroupTree( timeStep );
-                const auto& child_groups = group_tree.children( group_name );
-
-                if (child_groups.size() && query_mode == GroupWellQueryMode::Recursive) {
-                    for (const auto& child : child_groups) {
-                        const auto& child_wells = getChildWells2( child, timeStep, query_mode );
-                        wells.insert( wells.end() , child_wells.begin() , child_wells.end());
-                    }
-                } else {
-                    for (const auto& well_name : group.getWells( timeStep ))
-                        wells.push_back( this->getWell2( well_name, timeStep ));
-                }
-            }
-            return wells;
-        }
-    }
-
-
-    std::vector< const Group* > Schedule::getChildGroups(const std::string& group_name, size_t timeStep) const {
-        if (!hasGroup(group_name))
-            throw std::invalid_argument("No such group: " + group_name);
-        {
-            const auto& group = getGroup( group_name );
-            std::vector<const Group*> child_groups;
-
-            if (group.hasBeenDefined( timeStep )) {
-                const GroupTree& group_tree = getGroupTree( timeStep );
-                const auto& ch_grps = group_tree.children( group_name );
-                //for (const std::string& group_name : ch_grps) {
-                for ( auto it = ch_grps.begin() ; it != ch_grps.end(); it++) {
-                    child_groups.push_back( &getGroup(*it));
-                }
+            if (group.defined( timeStep )) {
+                for (const auto& child_name : group.groups())
+                    child_groups.push_back( std::addressof(this->getGroup2(child_name, timeStep)));
             }
             return child_groups;
         }
     }
+
+
+    std::vector< Well2 > Schedule::getChildWells2(const std::string& group_name, size_t timeStep, GroupWellQueryMode query_mode) const {
+        if (!hasGroup(group_name))
+            throw std::invalid_argument("No such group: '" + group_name + "'");
+        {
+            const auto& dynamic_state = this->groups.at(group_name);
+            const auto& group_ptr = dynamic_state.get(timeStep);
+            if (group_ptr) {
+                std::vector<Well2> wells;
+
+                if (group_ptr->groups().size() && query_mode == GroupWellQueryMode::Recursive) {
+                    for (const auto& child_name : group_ptr->groups()) {
+                        const auto& child_wells = getChildWells2( child_name, timeStep, query_mode );
+                        wells.insert( wells.end() , child_wells.begin() , child_wells.end());
+                    }
+                } else {
+                    for (const auto& well_name : group_ptr->wells( ))
+                        wells.push_back( this->getWell2( well_name, timeStep ));
+                }
+
+                return wells;
+            } else
+                return {};
+        }
+    }
+
 
 
     std::vector<Well2> Schedule::getWells2(size_t timeStep) const {
@@ -2007,6 +2071,22 @@ namespace {
         return *well_ptr;
     }
 
+    const Group2& Schedule::getGroup2(const std::string& groupName, size_t timeStep) const {
+        if (this->groups.count(groupName) == 0)
+            throw std::invalid_argument("No such group: '" + groupName + "'");
+
+        const auto& dynamic_state = this->groups.at(groupName);
+        auto& group_ptr = dynamic_state.get(timeStep);
+        if (!group_ptr)
+            throw std::invalid_argument("Group: " + groupName + " not yet defined at step: " + std::to_string(timeStep));
+
+        return *group_ptr;
+    }
+
+    void Schedule::updateGroup(std::shared_ptr<Group2> group, size_t reportStep) {
+        auto& dynamic_state = this->groups.at(group->name());
+        dynamic_state.update(reportStep, std::move(group));
+    }
 
     /*
       There are many SCHEDULE keyword which take a wellname as argument. In
@@ -2096,10 +2176,11 @@ namespace {
         auto star_pos = pattern.find('*');
         if (star_pos != std::string::npos) {
             std::vector<std::string> names;
-            for (const auto& group_pair : this->m_groups) {
+            for (const auto& group_pair : this->groups) {
                 if (name_match(pattern, group_pair.first)) {
-                    const auto& group = group_pair.second;
-                    if (group.hasBeenDefined(timeStep))
+                    const auto& dynamic_state = group_pair.second;
+                    const auto& group_ptr = dynamic_state.get(timeStep);
+                    if (group_ptr)
                         names.push_back(group_pair.first);
                 }
             }
@@ -2108,8 +2189,9 @@ namespace {
 
         // Normal group name without any special characters
         if (this->hasGroup(pattern)) {
-            const auto& group = this->m_groups.at(pattern);
-            if (group.hasBeenDefined(timeStep))
+            const auto& dynamic_state = this->groups.at(pattern);
+            const auto& group_ptr = dynamic_state.get(timeStep);
+            if (group_ptr)
                 return { pattern };
         }
         return {};
@@ -2117,10 +2199,11 @@ namespace {
 
     std::vector<std::string> Schedule::groupNames(size_t timeStep) const {
         std::vector<std::string> names;
-        for (const auto& group_pair : this->m_groups) {
-            const auto& group = group_pair.second;
-            if (group.hasBeenDefined(timeStep))
-                names.push_back( group.name() );
+        for (const auto& group_pair : this->groups) {
+            const auto& dynamic_state = group_pair.second;
+            const auto& group_ptr = dynamic_state.get(timeStep);
+            if (group_ptr)
+                names.push_back(group_pair.first);
         }
         return names;
     }
@@ -2134,7 +2217,7 @@ namespace {
         if (star_pos != std::string::npos) {
             int flags = 0;
             std::vector<std::string> names;
-            for (const auto& group_pair : this->m_groups) {
+            for (const auto& group_pair : this->groups) {
                 if (fnmatch(pattern.c_str(), group_pair.first.c_str(), flags) == 0)
                     names.push_back(group_pair.first);
             }
@@ -2150,21 +2233,31 @@ namespace {
 
     std::vector<std::string> Schedule::groupNames() const {
         std::vector<std::string> names;
-        for (const auto& group_pair : this->m_groups)
+        for (const auto& group_pair : this->groups)
             names.push_back(group_pair.first);
 
         return names;
     }
 
 
-    void Schedule::addGroup(const std::string& groupName, size_t timeStep) {
-        const size_t gseqIndex = m_groups.size();
-        m_groups.insert( std::make_pair( groupName, Group { groupName, gseqIndex, m_timeMap, timeStep } ));
+    void Schedule::addGroup(const std::string& groupName, size_t timeStep, const UnitSystem& unit_system) {
+        const size_t gseqIndex = this->groups.size();
+
+        groups.insert( std::make_pair( groupName, DynamicState<std::shared_ptr<Group2>>(this->m_timeMap, nullptr)));
+        auto group_ptr = std::make_shared<Group2>(groupName, gseqIndex, timeStep, this->getUDQConfig(timeStep).params().undefinedValue(), unit_system);
+        auto& dynamic_state = this->groups.at(groupName);
+        dynamic_state.update(timeStep, group_ptr);
+
         m_events.addEvent( ScheduleEvents::NEW_GROUP , timeStep );
+
+        // All newly created groups are attached to the field group,
+        // can then be relocated with the GRUPTREE keyword.
+        if (groupName != "FIELD")
+            this->addGroupToGroup("FIELD", *group_ptr, timeStep);
     }
 
     size_t Schedule::numGroups() const {
-        return m_groups.size();
+        return groups.size();
     }
 
     size_t Schedule::numGroups(size_t timeStep) const {
@@ -2173,33 +2266,54 @@ namespace {
     }
 
     bool Schedule::hasGroup(const std::string& groupName) const {
-        return m_groups.count(groupName) > 0;
-    }
-
-    const Group& Schedule::getGroup(const std::string& groupName) const {
-        if (hasGroup(groupName)) {
-            return m_groups.at(groupName);
-        } else
-            throw std::invalid_argument("Group: " + groupName + " does not exist");
-    }
-
-    Group& Schedule::getGroup(const std::string& groupName) {
-        if (hasGroup(groupName)) {
-            return m_groups.at(groupName);
-        } else
-            throw std::invalid_argument("Group: " + groupName + " does not exist");
+        return groups.count(groupName) > 0;
     }
 
 
-    void Schedule::addWellToGroup( Group& newGroup, const std::string& wellName , size_t timeStep) {
-        auto& dynamic_state = this->wells_static.at(wellName);
-        auto well_ptr = std::make_shared<Well2>( *dynamic_state[timeStep] );
-        if (well_ptr->groupName() != "")
-            this->m_groups.at(well_ptr->groupName()).delWell(timeStep, wellName);
+    void Schedule::addGroupToGroup( const std::string& parent_group, const Group2& child_group, size_t timeStep) {
+        // Add to new parent
+        auto& dynamic_state = this->groups.at(parent_group);
+        auto parent_ptr = std::make_shared<Group2>( *dynamic_state[timeStep] );
+        if (parent_ptr->addGroup(child_group.name()))
+            this->updateGroup(std::move(parent_ptr), timeStep);
 
-        well_ptr->updateGroup(newGroup.name());
-        newGroup.addWell(timeStep, well_ptr->name());
-        this->updateWell(well_ptr, timeStep);
+        // Check and update backreference in child
+        if (child_group.parent() != parent_group) {
+            auto old_parent = std::make_shared<Group2>( this->getGroup2(child_group.parent(), timeStep) );
+            old_parent->delGroup(child_group.name());
+            this->updateGroup(std::move(old_parent), timeStep);
+
+            auto child_ptr = std::make_shared<Group2>( child_group );
+            child_ptr->updateParent(parent_group);
+            this->updateGroup(std::move(child_ptr), timeStep);
+
+        }
+    }
+
+    void Schedule::addGroupToGroup( const std::string& parent_group, const std::string& child_group, size_t timeStep) {
+        this->addGroupToGroup(parent_group, this->getGroup2(child_group, timeStep), timeStep);
+    }
+
+    void Schedule::addWellToGroup( const std::string& group_name, const std::string& well_name , size_t timeStep) {
+        const auto& well = this->getWell2(well_name, timeStep);
+        const auto old_gname = well.groupName();
+        if (old_gname != group_name) {
+            auto well_ptr = std::make_shared<Well2>( well );
+            well_ptr->updateGroup(group_name);
+            this->updateWell(well_ptr, timeStep);
+            this->addWellEvent(well_ptr->name(), ScheduleEvents::WELL_WELSPECS_UPDATE, timeStep);
+
+            // Remove well child reference from previous group
+            auto group = std::make_shared<Group2>(this->getGroup2(old_gname, timeStep));
+            group->delWell(well_name);
+            this->updateGroup(std::move(group), timeStep);
+        }
+
+        // Add well child reference to new group
+        auto group_ptr = std::make_shared<Group2>(this->getGroup2(group_name, timeStep));
+        group_ptr->addWell(well_name);
+        this->updateGroup(group_ptr, timeStep);
+        this->m_events.addEvent( ScheduleEvents::GROUP_CHANGE , timeStep);
    }
 
 
@@ -2365,24 +2479,24 @@ namespace {
     }
 
 
-    const Actions& Schedule::actions() const {
+    const Action::Actions& Schedule::actions() const {
         return this->m_actions;
     }
 
 
-    void Schedule::applyAction(size_t reportStep, const ActionX& action, const std::vector<std::string>& matching_wells) {
+    void Schedule::applyAction(size_t reportStep, const Action::ActionX& action, const Action::Result& result) {
         ParseContext parseContext;
         ErrorGuard errors;
 
         for (const auto& keyword : action) {
-            if (!ActionX::valid_keyword(keyword.name()))
+            if (!Action::ActionX::valid_keyword(keyword.name()))
                 throw std::invalid_argument("The keyword: " + keyword.name() + " can not be handled in the ACTION body");
 
             if (keyword.name() == "WELOPEN")
-                this->handleWELOPEN(keyword, reportStep, parseContext, errors, matching_wells);
+                this->handleWELOPEN(keyword, reportStep, parseContext, errors, result.wells());
         }
 
     }
 
-}
 
+}

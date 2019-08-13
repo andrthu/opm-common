@@ -28,8 +28,8 @@
 #include <opm/parser/eclipse/EclipseState/Schedule/DynamicState.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/DynamicVector.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Events.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Group/Group.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Group/GroupTree.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Group/Group2.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Group/GTNode.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/OilVaporizationProperties.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/ScheduleEnums.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Tuning.hpp>
@@ -43,9 +43,50 @@
 #include <opm/parser/eclipse/EclipseState/Schedule/Well/WellTestConfig.hpp>
 #include <opm/parser/eclipse/EclipseState/Schedule/Action/Actions.hpp>
 
+
+/*
+  The DynamicState<std::shared_ptr<T>> pattern: The quantities in the Schedule
+  section like e.g. wellrates and completion properties are typically
+  characterized by the following behaviour:
+
+    1. They can be updated repeatedly at arbitrary points in the Schedule
+       section.
+
+    2. The value set at one timestep will apply until is explicitly set again at
+       a later timestep.
+
+  These properties are typically stored in a DynamicState<T> container; the
+  DynamicState<T> class is a container which implements this semantics:
+
+    1. It is legitimate to ask for an out-of-range value, you will then get the
+       last value which has been set.
+
+    2. When assigning an out-of-bounds value the container will append the
+       currently set value until correct length has been reached, and then the
+       new value will be assigned.
+
+    3. The DynamicState<T> has an awareness of the total length of the time
+       axis, trying to access values beyound that is illegal.
+
+  For many of the non-trival objects like eg Well2 and Group2 the DynamicState<>
+  contains a shared pointer to an underlying object, that way the fill operation
+  when the vector is resized is quite fast. The following pattern is quite
+  common for the Schedule implementation:
+
+
+       // Create a new well object.
+       std::shared_ptr<Well> new_well = this->getWell2( well_name, time_step );
+
+       // Update the new well object with new settings from the deck, the
+       // updateXXXX() method will return true if the well object was actually
+       // updated:
+       if (new_well->updateRate( new_rate ))
+           this->dynamic_state.update( time_step, new_well);
+
+*/
+
 namespace Opm
 {
-
     class Actions;
     class Deck;
     class DeckKeyword;
@@ -132,22 +173,23 @@ namespace Opm
         std::vector<Well2> getWells2(size_t timeStep) const;
         std::vector<Well2> getWells2atEnd() const;
 
+        std::vector<const Group2*> getChildGroups2(const std::string& group_name, size_t timeStep) const;
         std::vector<Well2> getChildWells2(const std::string& group_name, size_t timeStep, GroupWellQueryMode query_mode) const;
         const OilVaporizationProperties& getOilVaporizationProperties(size_t timestep) const;
 
         const WellTestConfig& wtestConfig(size_t timestep) const;
         const WListManager& getWListManager(size_t timeStep) const;
         const UDQInput& getUDQConfig(size_t timeStep) const;
-        const Actions& actions() const;
+        const Action::Actions& actions() const;
         void evalAction(const SummaryState& summary_state, size_t timeStep);
 
-        const GroupTree& getGroupTree(size_t t) const;
-        std::vector< const Group* > getChildGroups(const std::string& group_name, size_t timeStep) const;
+        GTNode groupTree(std::size_t report_step) const;
+        GTNode groupTree(const std::string& root_node, std::size_t report_step) const;
         size_t numGroups() const;
         size_t numGroups(size_t timeStep) const;
         bool hasGroup(const std::string& groupName) const;
-        const Group& getGroup(const std::string& groupName) const;
-        Group& getGroup(const std::string& groupName);
+        const Group2& getGroup2(const std::string& groupName, size_t timeStep) const;
+
         const Tuning& getTuning() const;
         const MessageLimits& getMessageLimits() const;
         void invalidNamePattern (const std::string& namePattern, const ParseContext& parseContext, ErrorGuard& errors, const DeckKeyword& keyword) const;
@@ -169,12 +211,11 @@ namespace Opm
         void filterConnections(const EclipseGrid& grid);
         size_t size() const;
 
-        void applyAction(size_t reportStep, const ActionX& action, const std::vector<std::string>& matching_wells);
+        void applyAction(size_t reportStep, const Action::ActionX& action, const Action::Result& result);
     private:
         TimeMap m_timeMap;
-        OrderedMap< std::string, Group > m_groups;
         OrderedMap< std::string, DynamicState<std::shared_ptr<Well2>>> wells_static;
-        DynamicState< GroupTree > m_rootGroupTree;
+        OrderedMap< std::string, DynamicState<std::shared_ptr<Group2>>> groups;
         DynamicState< OilVaporizationProperties > m_oilvaporizationproperties;
         Events m_events;
         DynamicVector< Deck > m_modifierDeck;
@@ -189,22 +230,24 @@ namespace Opm
         DynamicState<WellProducer::ControlModeEnum> global_whistctl_mode;
         RFTConfig rft_config;
 
-        Actions m_actions;
+        Action::Actions m_actions;
 
-        std::vector< Group* > getGroups(const std::string& groupNamePattern);
         std::map<std::string,Events> well_events;
 
+        GTNode groupTree(const std::string& root_node, std::size_t report_step, const GTNode * parent) const;
+        void updateGroup(std::shared_ptr<Group2> group, size_t reportStep);
         bool updateWellStatus( const std::string& well, size_t reportStep , WellCommon::StatusEnum status);
-        void addWellToGroup( Group& newGroup , const std::string& wellName , size_t timeStep);
+        void addWellToGroup( const std::string& group_name, const std::string& well_name , size_t timeStep);
         void iterateScheduleSection(const ParseContext& parseContext ,  ErrorGuard& errors, const SCHEDULESection& , const EclipseGrid& grid,
                                     const Eclipse3DProperties& eclipseProperties);
-        bool handleGroupFromWELSPECS(const std::string& groupName, GroupTree& newTree) const;
-        void addGroup(const std::string& groupName , size_t timeStep);
+        void addGroupToGroup( const std::string& parent_group, const std::string& child_group, size_t timeStep);
+        void addGroupToGroup( const std::string& parent_group, const Group2& child_group, size_t timeStep);
+        void addGroup(const std::string& groupName , size_t timeStep, const UnitSystem& unit_system);
         void addWell(const std::string& wellName, const DeckRecord& record, size_t timeStep, WellCompletion::CompletionOrderEnum wellCompletionOrder, const UnitSystem& unit_system);
         void handleUDQ(const DeckKeyword& keyword, size_t currentStep);
         void handleWLIST(const DeckKeyword& keyword, size_t currentStep);
         void handleCOMPORD(const ParseContext& parseContext, ErrorGuard& errors, const DeckKeyword& compordKeyword, size_t currentStep);
-        void handleWELSPECS( const SCHEDULESection&, size_t, size_t , const UnitSystem& unit_system);
+        void handleWELSPECS( const SCHEDULESection&, size_t, size_t , const UnitSystem& unit_system, const ParseContext& parseContext, ErrorGuard& errors);
         void handleWCONHIST( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
         void handleWCONPROD( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
         void handleWGRUPCON( const DeckKeyword& keyword, size_t currentStep);
@@ -224,13 +267,13 @@ namespace Opm
         void handleWCONINJH(const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
         void handleWELOPEN( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors, const std::vector<std::string>& matching_wells = {});
         void handleWELTARG( const SCHEDULESection&,  const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
-        void handleGCONINJE( const SCHEDULESection&,  const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
+        void handleGCONINJE( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
         void handleGCONPROD( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
         void handleGEFAC( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
         void handleWEFAC( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
         void handleTUNING( const DeckKeyword& keyword, size_t currentStep);
-        void handleGRUPTREE( const DeckKeyword& keyword, size_t currentStep);
-        void handleGRUPNET( const DeckKeyword& keyword, size_t currentStep);
+        void handleGRUPTREE( const DeckKeyword& keyword, size_t currentStep, const UnitSystem& unit_system, const ParseContext& parseContext, ErrorGuard& errors);
+        void handleGRUPNET( const DeckKeyword& keyword, size_t currentStep, const UnitSystem& unit_system);
         void handleWRFT( const DeckKeyword& keyword, size_t currentStep);
         void handleWTEST( const DeckKeyword& keyword, size_t currentStep, const ParseContext& parseContext, ErrorGuard& errors);
         void handleWRFTPLT( const DeckKeyword& keyword, size_t currentStep);

@@ -271,6 +271,14 @@ namespace Opm {
          */
         const static std::string PARSE_MISSING_SECTIONS;
 
+        /*
+          When defining wells and groups with the WELSPECS and GRUPTREE keywords
+          we do not allow leading or trailing spaces. The code in Schedule.cpp
+          will *unconditionally* remove the spaces, but with PARSE_WGNAME_SPACE
+          setting you can additionally configure the normal IGNORE|WARN|ERROR
+          behavior.
+        */
+        const static std::string PARSE_WGNAME_SPACE;
 
         /*
           If you have configured a specific well in the summary section,
@@ -332,7 +340,7 @@ namespace Opm {
 
         const static std::string RPT_UNKNOWN_MNEMONIC;
 
-        const static std::string SCHEDULE_WELL_ERROR;
+        const static std::string SCHEDULE_GROUP_ERROR;
 
         const static std::string SCHEDULE_COMPSEGS_INVALID;
         const static std::string SCHEDULE_COMPSEGS_NOT_SUPPORTED;

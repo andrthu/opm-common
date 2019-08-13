@@ -78,6 +78,7 @@ namespace Opm {
         addKey(PARSE_EXTRA_DATA, InputError::THROW_EXCEPTION);
         addKey(PARSE_MISSING_INCLUDE, InputError::EXIT1);
         addKey(PARSE_LONG_KEYWORD, InputError::WARN);
+        addKey(PARSE_WGNAME_SPACE, InputError::THROW_EXCEPTION);
 
         addKey(UNIT_SYSTEM_MISMATCH, InputError::THROW_EXCEPTION);
 
@@ -110,7 +111,7 @@ namespace Opm {
 
         this->addKey(UDQ_PARSE_ERROR, InputError::THROW_EXCEPTION);
         this->addKey(UDQ_TYPE_ERROR, InputError::THROW_EXCEPTION);
-        this->addKey(SCHEDULE_WELL_ERROR, InputError::THROW_EXCEPTION);
+        this->addKey(SCHEDULE_GROUP_ERROR, InputError::THROW_EXCEPTION);
         this->addKey(SCHEDULE_COMPSEGS_INVALID, InputError::THROW_EXCEPTION);
         this->addKey(SCHEDULE_COMPSEGS_NOT_SUPPORTED, InputError::THROW_EXCEPTION);
     }
@@ -315,6 +316,7 @@ namespace Opm {
     const std::string ParseContext::PARSE_MISSING_SECTIONS = "PARSE_MISSING_SECTIONS";
     const std::string ParseContext::PARSE_MISSING_INCLUDE = "PARSE_MISSING_INCLUDE";
     const std::string ParseContext::PARSE_LONG_KEYWORD = "PARSE_LONG_KEYWORD";
+    const std::string ParseContext::PARSE_WGNAME_SPACE = "PARSE_WGNAME_SPACE";
 
     const std::string ParseContext::UNIT_SYSTEM_MISMATCH = "UNIT_SYSTEM_MISMATCH";
 
@@ -347,7 +349,7 @@ namespace Opm {
 
     const std::string ParseContext::UDQ_PARSE_ERROR = "UDQ_PARSE_ERROR";
     const std::string ParseContext::UDQ_TYPE_ERROR = "UDQ_TYPE_ERROR";
-    const std::string ParseContext::SCHEDULE_WELL_ERROR = "SCHEDULE_WELL_ERROR";
+    const std::string ParseContext::SCHEDULE_GROUP_ERROR = "SCHEDULE_GROUP_ERROR";
 
     const std::string ParseContext::SCHEDULE_COMPSEGS_INVALID = "SCHEDULE_COMPSEG_INVALID";
     const std::string ParseContext::SCHEDULE_COMPSEGS_NOT_SUPPORTED = "SCHEDULE_COMPSEGS_NOT_SUPPORTED";
